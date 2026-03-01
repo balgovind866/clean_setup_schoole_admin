@@ -33,7 +33,7 @@ const AppRoutes: FC = () => {
               <Route
                 index
                 element={
-                  <Navigate to={currentUser.role === 'superadmin' ? '/administration' : '/dashboard'} />
+                  <Navigate to={currentUser.role === 'super_admin' ? '/administration' : '/dashboard'} />
                 }
               />
             </>

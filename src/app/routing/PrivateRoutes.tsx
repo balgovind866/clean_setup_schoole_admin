@@ -23,13 +23,13 @@ const PrivateRoutes = () => {
   return (
     <Routes>
       <Route element={<MasterLayout />}>
-        <Route path='auth/*' element={<Navigate to={currentUser?.role === 'superadmin' ? '/administration' : '/dashboard'} />} />
+        <Route path='auth/*' element={<Navigate to={currentUser?.role === 'super_admin' ? '/administration' : '/dashboard'} />} />
 
         {/* Redirect based on role */}
         <Route
           path='dashboard'
           element={
-            currentUser?.role === 'superadmin' ? (
+            currentUser?.role === 'super_admin' ? (
               <Navigate to='/administration' />
             ) : (
               <DashboardWrapper />
@@ -40,7 +40,7 @@ const PrivateRoutes = () => {
         <Route
           path='administration/*'
           element={
-            currentUser?.role === 'superadmin' ? (
+            currentUser?.role === 'super_admin' ? (
               <SuspensedView>
                 <AdministrationPage />
               </SuspensedView>

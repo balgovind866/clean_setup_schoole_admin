@@ -4,6 +4,7 @@ import * as Yup from 'yup'
 import clsx from 'clsx'
 import { useFormik } from 'formik'
 import { getUserByToken, login } from '../core/_requests'
+import { AuthModel } from '../core/_models'
 import { toAbsoluteUrl } from '../../../../_metronic/helpers'
 import { useAuth } from '../core/Auth'
 
@@ -17,11 +18,17 @@ const loginSchema = Yup.object().shape({
     .min(3, 'Minimum 3 symbols')
     .max(50, 'Maximum 50 symbols')
     .required('Password is required'),
+  schoolId: Yup.string().when('loginType', {
+    is: 'admin', // Matches School Admin
+    then: (schema) => schema.required('School ID is required'),
+  }),
 })
 
 const initialValues = {
   email: 'admin@demo.com',
   password: 'demo',
+  schoolId: '',
+  loginType: 'admin' as 'super_admin' | 'admin',
 }
 
 /*
@@ -32,7 +39,7 @@ const initialValues = {
 
 export function Login() {
   const [loading, setLoading] = useState(false)
-  const [loginType, setLoginType] = useState<'superadmin' | 'schooladmin'>('schooladmin')
+  const [loginType, setLoginType] = useState<'super_admin' | 'admin'>('admin')
   const { saveAuth, setCurrentUser } = useAuth()
 
   const formik = useFormik({
@@ -41,10 +48,23 @@ export function Login() {
     onSubmit: async (values, { setStatus, setSubmitting }) => {
       setLoading(true)
       try {
-        const { data: auth } = await login(values.email, values.password, loginType)
-        saveAuth(auth)
-        const { data: user } = await getUserByToken(auth.api_token)
-        setCurrentUser(user)
+        const { data: response } = await login(values.email, values.password, loginType, values.schoolId)
+        if (response.success) {
+          const auth: AuthModel = {
+            api_token: response.data.token,
+          }
+          saveAuth(auth)
+          // Extract user from either 'user' or 'admin' property
+          const user = response.data.user || response.data.admin
+          if (user) {
+            setCurrentUser(user)
+          }
+        } else {
+          saveAuth(undefined)
+          setStatus(response.message || 'The login details are incorrect')
+          setSubmitting(false)
+          setLoading(false)
+        }
       } catch (error) {
         console.error(error)
         saveAuth(undefined)
@@ -73,20 +93,26 @@ export function Login() {
       <div className='d-flex bg-light rounded p-1 mb-9'>
         <button
           type='button'
-          onClick={() => setLoginType('superadmin')}
+          onClick={() => {
+            setLoginType('super_admin')
+            formik.setFieldValue('loginType', 'super_admin')
+          }}
           className={clsx(
             'btn btn-sm flex-grow-1',
-            loginType === 'superadmin' ? 'btn-white shadow-sm' : 'btn-color-gray-500'
+            loginType === 'super_admin' ? 'btn-white shadow-sm' : 'btn-color-gray-500'
           )}
         >
           Super Admin
         </button>
         <button
           type='button'
-          onClick={() => setLoginType('schooladmin')}
+          onClick={() => {
+            setLoginType('admin')
+            formik.setFieldValue('loginType', 'admin')
+          }}
           className={clsx(
             'btn btn-sm flex-grow-1',
-            loginType === 'schooladmin' ? 'btn-white shadow-sm' : 'btn-color-gray-500'
+            loginType === 'admin' ? 'btn-white shadow-sm' : 'btn-color-gray-500'
           )}
         >
           School Admin
@@ -101,25 +127,38 @@ export function Login() {
       ) : (
         <div className='mb-10 bg-light-info p-8 rounded'>
           <div className='text-info'>
-            {loginType === 'superadmin' ? (
-              <>Use <strong>admin@eduadmin.com</strong> for Super Admin</>
+            {loginType === 'super_admin' ? (
+              <>Use <strong>admin@myapp.com</strong> for Super Admin</>
             ) : (
-              <>Use <strong>admin@dps001.edu.in</strong> for School Admin</>
+              <>Use <strong>admin@sunbeam.com</strong> for School Admin</>
             )}
           </div>
         </div>
       )}
 
       {/* begin::School ID (Only for School Admin) */}
-      {loginType === 'schooladmin' && (
+      {loginType === 'admin' && (
         <div className='fv-row mb-8'>
           <label className='form-label fs-6 fw-bolder text-gray-900'>School ID</label>
           <input
-            placeholder='e.g. DPS001'
+            placeholder='e.g. 7'
+            {...formik.getFieldProps('schoolId')}
+            className={clsx(
+              'form-control bg-transparent',
+              { 'is-invalid': formik.touched.schoolId && formik.errors.schoolId },
+              {
+                'is-valid': formik.touched.schoolId && !formik.errors.schoolId,
+              }
+            )}
             type='text'
-            className='form-control bg-transparent'
+            name='schoolId'
             autoComplete='off'
           />
+          {formik.touched.schoolId && formik.errors.schoolId && (
+            <div className='fv-plugins-message-container'>
+              <span role='alert'>{formik.errors.schoolId}</span>
+            </div>
+          )}
         </div>
       )}
 

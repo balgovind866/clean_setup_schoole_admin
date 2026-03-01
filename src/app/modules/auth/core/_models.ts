@@ -31,7 +31,7 @@ export interface UserEmailSettingsModel {
     newsAboutKeenthemesProductsAndFeatureUpdates?: boolean
     tipsOnGettingMoreOutOfKeen?: boolean
     thingsYouMissedSindeYouLastLoggedIntoKeen?: boolean
-    newsAboutStartOnPartnerProductsAndOtherServices?: boolean
+    newsAboutPartnerProductsAndOtherServices?: boolean
     tipsOnStartBusinessProducts?: boolean
   }
 }
@@ -45,24 +45,36 @@ export interface UserSocialNetworksModel {
 
 export interface UserModel {
   id: number
-  username: string
-  password: string | undefined
+  name: string
   email: string
-  first_name: string
-  last_name: string
+  role: 'super_admin' | 'admin' | string
+  school_name?: string
+  username?: string
+  password?: string
+  first_name?: string
+  last_name?: string
   fullname?: string
   occupation?: string
   companyName?: string
   phone?: string
   roles?: Array<number>
-  role?: 'superadmin' | 'schooladmin'
   pic?: string
   language?: 'en' | 'de' | 'es' | 'fr' | 'ja' | 'zh' | 'ru'
   timeZone?: string
-  website?: 'https://keenthemes.com'
+  website?: string
   emailSettings?: UserEmailSettingsModel
   auth?: AuthModel
   communication?: UserCommunicationModel
   address?: UserAddressModel
   socialNetworks?: UserSocialNetworksModel
+}
+
+export interface LoginResponse {
+  success: boolean
+  message: string
+  data: {
+    token: string
+    user?: UserModel
+    admin?: UserModel
+  }
 }
