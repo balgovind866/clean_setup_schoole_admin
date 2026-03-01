@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { HeaderWrapper } from './components/header'
 import { Sidebar } from './components/sidebar'
+import { ScrollTop } from './components/scroll-top'
 import { PageDataProvider } from './core'
 import { reInitMenu } from '../helpers'
 
@@ -26,8 +27,7 @@ const MasterLayout = () => {
           </div>
         </div>
       </div>
-
-
+      <ScrollTop />
     </PageDataProvider>
   )
 }

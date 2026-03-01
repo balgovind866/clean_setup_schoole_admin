@@ -32,6 +32,7 @@ const initialValues = {
 
 export function Login() {
   const [loading, setLoading] = useState(false)
+  const [loginType, setLoginType] = useState<'superadmin' | 'schooladmin'>('schooladmin')
   const { saveAuth, setCurrentUser } = useAuth()
 
   const formik = useFormik({
@@ -40,7 +41,7 @@ export function Login() {
     onSubmit: async (values, { setStatus, setSubmitting }) => {
       setLoading(true)
       try {
-        const { data: auth } = await login(values.email, values.password)
+        const { data: auth } = await login(values.email, values.password, loginType)
         saveAuth(auth)
         const { data: user } = await getUserByToken(auth.api_token)
         setCurrentUser(user)
@@ -64,60 +65,34 @@ export function Login() {
       {/* begin::Heading */}
       <div className='text-center mb-11'>
         <h1 className='text-gray-900 fw-bolder mb-3'>Sign In</h1>
-        <div className='text-gray-500 fw-semibold fs-6'>Your Social Campaigns</div>
+        <div className='text-gray-500 fw-semibold fs-6'>EduAdmin Management System</div>
       </div>
-      {/* begin::Heading */}
+      {/* end::Heading */}
 
-      {/* begin::Login options */}
-      <div className='row g-3 mb-9'>
-        {/* begin::Col */}
-        <div className='col-md-6'>
-          {/* begin::Google link */}
-          <a
-            href='#'
-            className='btn btn-flex btn-outline btn-text-gray-700 btn-active-color-primary bg-state-light flex-center text-nowrap w-100'
-          >
-            <img
-              alt='Logo'
-              src={toAbsoluteUrl('media/svg/brand-logos/google-icon.svg')}
-              className='h-15px me-3'
-            />
-            Sign in with Google
-          </a>
-          {/* end::Google link */}
-        </div>
-        {/* end::Col */}
-
-        {/* begin::Col */}
-        <div className='col-md-6'>
-          {/* begin::Google link */}
-          <a
-            href='#'
-            className='btn btn-flex btn-outline btn-text-gray-700 btn-active-color-primary bg-state-light flex-center text-nowrap w-100'
-          >
-            <img
-              alt='Logo'
-              src={toAbsoluteUrl('media/svg/brand-logos/apple-black.svg')}
-              className='theme-light-show h-15px me-3'
-            />
-            <img
-              alt='Logo'
-              src={toAbsoluteUrl('media/svg/brand-logos/apple-black-dark.svg')}
-              className='theme-dark-show h-15px me-3'
-            />
-            Sign in with Apple
-          </a>
-          {/* end::Google link */}
-        </div>
-        {/* end::Col */}
+      {/* begin::Role Switch */}
+      <div className='d-flex bg-light rounded p-1 mb-9'>
+        <button
+          type='button'
+          onClick={() => setLoginType('superadmin')}
+          className={clsx(
+            'btn btn-sm flex-grow-1',
+            loginType === 'superadmin' ? 'btn-white shadow-sm' : 'btn-color-gray-500'
+          )}
+        >
+          Super Admin
+        </button>
+        <button
+          type='button'
+          onClick={() => setLoginType('schooladmin')}
+          className={clsx(
+            'btn btn-sm flex-grow-1',
+            loginType === 'schooladmin' ? 'btn-white shadow-sm' : 'btn-color-gray-500'
+          )}
+        >
+          School Admin
+        </button>
       </div>
-      {/* end::Login options */}
-
-      {/* begin::Separator */}
-      <div className='separator separator-content my-14'>
-        <span className='w-125px text-gray-500 fw-semibold fs-7'>Or with email</span>
-      </div>
-      {/* end::Separator */}
+      {/* end::Role Switch */}
 
       {formik.status ? (
         <div className='mb-lg-15 alert alert-danger'>
@@ -126,9 +101,25 @@ export function Login() {
       ) : (
         <div className='mb-10 bg-light-info p-8 rounded'>
           <div className='text-info'>
-            Use account <strong>admin@demo.com</strong> and password <strong>demo</strong> to
-            continue.
+            {loginType === 'superadmin' ? (
+              <>Use <strong>admin@eduadmin.com</strong> for Super Admin</>
+            ) : (
+              <>Use <strong>admin@dps001.edu.in</strong> for School Admin</>
+            )}
           </div>
+        </div>
+      )}
+
+      {/* begin::School ID (Only for School Admin) */}
+      {loginType === 'schooladmin' && (
+        <div className='fv-row mb-8'>
+          <label className='form-label fs-6 fw-bolder text-gray-900'>School ID</label>
+          <input
+            placeholder='e.g. DPS001'
+            type='text'
+            className='form-control bg-transparent'
+            autoComplete='off'
+          />
         </div>
       )}
 
@@ -184,10 +175,8 @@ export function Login() {
       </div>
       {/* end::Form group */}
 
-      {/* begin::Wrapper */}
-
       {/* begin::Action */}
-      <div className='d-grid mb-10'>
+      <div className='d-grid mb-10 mt-8'>
         <button
           type='submit'
           id='kt_sign_in_submit'

@@ -5,22 +5,22 @@
  * components (e.g: `src/app/modules/Auth/pages/AuthPage`, `src/app/BasePage`).
  */
 
-import {FC} from 'react'
-import {Routes, Route, BrowserRouter, Navigate} from 'react-router-dom'
-import {PrivateRoutes} from './PrivateRoutes'
-import {ErrorsPage} from '../modules/errors/ErrorsPage'
-import {Logout, AuthPage, useAuth} from '../modules/auth'
-import {App} from '../App'
+import { FC } from 'react'
+import { Routes, Route, BrowserRouter, Navigate } from 'react-router-dom'
+import { PrivateRoutes } from './PrivateRoutes'
+import { ErrorsPage } from '../modules/errors/ErrorsPage'
+import { Logout, AuthPage, useAuth } from '../modules/auth'
+import { App } from '../App'
 
 /**
  * Base URL of the website.
  *
  * @see https://facebook.github.io/create-react-app/docs/using-the-public-folder
  */
-const {BASE_URL} = import.meta.env
+const { BASE_URL } = import.meta.env
 
 const AppRoutes: FC = () => {
-  const {currentUser} = useAuth()
+  const { currentUser } = useAuth()
   return (
     <BrowserRouter basename={BASE_URL}>
       <Routes>
@@ -30,7 +30,12 @@ const AppRoutes: FC = () => {
           {currentUser ? (
             <>
               <Route path='/*' element={<PrivateRoutes />} />
-              <Route index element={<Navigate to='/dashboard' />} />
+              <Route
+                index
+                element={
+                  <Navigate to={currentUser.role === 'superadmin' ? '/administration' : '/dashboard'} />
+                }
+              />
             </>
           ) : (
             <>
@@ -44,4 +49,4 @@ const AppRoutes: FC = () => {
   )
 }
 
-export {AppRoutes}
+export { AppRoutes }
