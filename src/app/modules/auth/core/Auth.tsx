@@ -63,7 +63,12 @@ const AuthInit: FC<WithChildren> = ({ children }) => {
         if (!currentUser) {
           const { data: response } = await getUserByToken(apiToken)
           if (response && response.success && response.data) {
-            setCurrentUser(response.data)
+            const user = response.data.user || response.data.admin
+            if (user) {
+              setCurrentUser(user)
+            } else {
+              logout()
+            }
           } else {
             logout()
           }

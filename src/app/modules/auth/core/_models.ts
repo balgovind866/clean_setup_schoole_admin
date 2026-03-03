@@ -69,6 +69,48 @@ export interface UserModel {
   socialNetworks?: UserSocialNetworksModel
 }
 
+export interface SchoolModel {
+  id: number
+  code: string
+  name: string
+  subdomain: string
+  db_host?: string
+  db_port?: number
+  db_username?: string
+  db_password?: string
+  schema?: string
+  database?: string
+  app_url?: string
+  is_active: boolean
+  setup_completed: boolean
+  createdAt?: string
+  principalName?: string
+  phone?: string
+  email?: string
+  address?: string
+}
+
+export interface SchoolCreationData {
+  code: string
+  name: string
+  subdomain: string
+  db_host: string
+  db_port: number
+  db_username: string
+  db_password: string
+  address: string
+  phone: string
+  email: string
+}
+
+export interface SchoolResponse {
+  success: boolean
+  message: string
+  data: {
+    school: SchoolModel
+  }
+}
+
 export interface LoginResponse {
   success: boolean
   message: string
@@ -76,5 +118,21 @@ export interface LoginResponse {
     token: string
     user?: UserModel
     admin?: UserModel
+  }
+}
+
+export interface SchoolsListResponse {
+  success: boolean
+  message: string
+  data: {
+    schools: SchoolModel[]
+  }
+  pagination: {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+    hasNextPage: boolean
+    hasPrevPage: boolean
   }
 }

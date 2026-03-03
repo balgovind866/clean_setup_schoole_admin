@@ -17,7 +17,7 @@ import './_metronic/assets/keenicons/solid/style.css'
  **/
 import './_metronic/assets/sass/style.scss'
 import { AppRoutes } from './app/routing/AppRoutes'
-import { AuthProvider, setupAxios } from './app/modules/auth'
+import { AuthProvider, AuthInit, setupAxios } from './app/modules/auth'
 /**
  * Creates `axios-mock-adapter` instance for provided `axios` instance, add
  * basic Metronic mocks and returns it.
@@ -39,7 +39,9 @@ if (container) {
     <QueryClientProvider client={queryClient}>
       <MetronicI18nProvider>
         <AuthProvider>
-          <AppRoutes />
+          <AuthInit>
+            <AppRoutes />
+          </AuthInit>
         </AuthProvider>
       </MetronicI18nProvider>
     </QueryClientProvider>
