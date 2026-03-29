@@ -77,6 +77,7 @@ const SidebarMenuMain = () => {
 
           {hasPermission('academic') && (
             <SidebarMenuItemWithSub to='/academic' title='Academic' icon='book-open' fontIcon='bi-journal-bookmark'>
+              <SidebarMenuItem to='/academic/sessions' title='Academic Sessions' hasBullet={true} />
               <SidebarMenuItem to='/academic/classes' title='Classes & Sections' hasBullet={true} />
               <SidebarMenuItem to='/academic/subjects' title='Subjects' hasBullet={true} />
               <SidebarMenuItem to='/academic/mapping' title='Teacher Mapping' hasBullet={true} />

@@ -7,6 +7,7 @@ const lazyLoad = (importFn: () => Promise<any>, wrapperName: string) =>
 
 // Academic Module Routes
 export const academicRoutes = {
+    sessions: lazy(() => import('../modules/academic/sessions/AcademicSessionsPage')),
     classes: lazyLoad(() => import('../modules/academic/ClassesPage'), 'ClassesWrapper'),
     subjects: lazyLoad(() => import('../modules/academic/SubjectsPage'), 'SubjectsWrapper'),
     mapping: lazyLoad(() => import('../modules/academic/MappingPage'), 'MappingWrapper'),

@@ -79,6 +79,7 @@ const PrivateRoutes = () => {
         <Route path='staff/roles-permissions' element={<SuspensedView><RouteConfig.staffAdditionalRoutes.rolesPermissions /></SuspensedView>} />
 
         {/* Academic */}
+        <Route path='academic/sessions' element={<SuspensedView><RouteConfig.academicRoutes.sessions /></SuspensedView>} />
         <Route path='academic/classes' element={<SuspensedView><RouteConfig.academicRoutes.classes /></SuspensedView>} />
         <Route path='academic/subjects' element={<SuspensedView><RouteConfig.academicRoutes.subjects /></SuspensedView>} />
         <Route path='academic/mapping' element={<SuspensedView><RouteConfig.academicRoutes.mapping /></SuspensedView>} />
