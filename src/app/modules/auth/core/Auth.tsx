@@ -17,7 +17,7 @@ type AuthContextProps = {
 const initAuthContextPropsState = {
   auth: authHelper.getAuth(),
   saveAuth: () => { },
-  currentUser: undefined,
+  currentUser: authHelper.getAuth()?.user || undefined,
   setCurrentUser: () => { },
   logout: () => { },
 }
@@ -30,19 +30,22 @@ const useAuth = () => {
 
 const AuthProvider: FC<WithChildren> = ({ children }) => {
   const [auth, setAuth] = useState<AuthModel | undefined>(authHelper.getAuth())
-  const [currentUser, setCurrentUser] = useState<UserModel | undefined>()
+  const [currentUser, setCurrentUser] = useState<UserModel | undefined>(authHelper.getAuth()?.user || undefined)
   const saveAuth = (auth: AuthModel | undefined) => {
     setAuth(auth)
     if (auth) {
+      if (auth.user) {
+        setCurrentUser(auth.user)
+      }
       authHelper.setAuth(auth)
     } else {
       authHelper.removeAuth()
+      setCurrentUser(undefined)
     }
   }
 
   const logout = () => {
     saveAuth(undefined)
-    setCurrentUser(undefined)
   }
 
   return (
@@ -75,16 +78,18 @@ const AuthInit: FC<WithChildren> = ({ children }) => {
         }
       } catch (error) {
         console.error(error)
-        if (currentUser) {
-          logout()
-        }
+        logout()
       } finally {
         setShowSplashScreen(false)
       }
     }
 
     if (auth && auth.api_token) {
-      requestUser(auth.api_token)
+      if (currentUser) {
+        setShowSplashScreen(false)
+      } else {
+        requestUser(auth.api_token)
+      }
     } else {
       logout()
       setShowSplashScreen(false)

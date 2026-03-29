@@ -50,12 +50,15 @@ export function Login() {
       try {
         const { data: response } = await login(values.email, values.password, loginType, values.schoolId)
         if (response.success) {
-          const auth: AuthModel = {
-            api_token: response.data.token,
-          }
-          saveAuth(auth)
           // Extract user from either 'user' or 'admin' property
           const user = response.data.user || response.data.admin
+
+          const auth: AuthModel = {
+            api_token: response.data.token,
+            user: user,
+          }
+          saveAuth(auth)
+
           if (user) {
             setCurrentUser(user)
           }
