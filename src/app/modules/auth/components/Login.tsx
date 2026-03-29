@@ -1,12 +1,10 @@
-
 import { useState } from 'react'
 import * as Yup from 'yup'
 import clsx from 'clsx'
 import { useFormik } from 'formik'
 import AsyncSelect from 'react-select/async'
-import { getUserByToken, login, getSchools } from '../core/_requests'
+import { login, getSchools } from '../core/_requests'
 import { AuthModel } from '../core/_models'
-import { toAbsoluteUrl } from '../../../../_metronic/helpers'
 import { useAuth } from '../core/Auth'
 
 const loginSchema = Yup.object().shape({
@@ -20,8 +18,8 @@ const loginSchema = Yup.object().shape({
     .max(50, 'Maximum 50 symbols')
     .required('Password is required'),
   schoolId: Yup.string().when('loginType', {
-    is: 'admin', // Matches School Admin
-    then: (schema) => schema.required('School ID is required'),
+    is: 'admin',
+    then: (schema) => schema.required('School is required'),
   }),
 })
 
@@ -32,22 +30,17 @@ const initialValues = {
   loginType: 'admin' as 'super_admin' | 'admin',
 }
 
-/*
-  Formik+YUP+Typescript:
-  https://jaredpalmer.com/formik/docs/tutorial#getfieldprops
-  https://medium.com/@maurice.de.beijer/yup-validation-and-typescript-and-formik-6c342578a20e
-*/
-
 export function Login() {
   const [loading, setLoading] = useState(false)
   const [loginType, setLoginType] = useState<'super_admin' | 'admin'>('admin')
+  const [showPassword, setShowPassword] = useState(false)
   const { saveAuth, setCurrentUser } = useAuth()
 
   const loadSchoolOptions = async (inputValue: string) => {
     try {
       const response = await getSchools(1, 10, inputValue, true)
-      if (response && response.data && response.data.data && response.data.data.schools) {
-        return response.data.data.schools.map((school) => ({
+      if (response?.data?.data?.schools) {
+        return response.data.data.schools.map((school: any) => ({
           value: school.id,
           label: `${school.name} (${school.code})`,
         }))
@@ -67,33 +60,95 @@ export function Login() {
       try {
         const { data: response } = await login(values.email, values.password, loginType, values.schoolId)
         if (response.success) {
-          // Extract user from either 'user' or 'admin' property
           const user = response.data.user || response.data.admin
-
-          const auth: AuthModel = {
-            api_token: response.data.token,
-            user: user,
-          }
+          const auth: AuthModel = { api_token: response.data.token, user }
           saveAuth(auth)
-
-          if (user) {
-            setCurrentUser(user)
-          }
+          if (user) setCurrentUser(user)
         } else {
           saveAuth(undefined)
-          setStatus(response.message || 'The login details are incorrect')
+          setStatus(response.message || 'Invalid credentials. Please try again.')
           setSubmitting(false)
           setLoading(false)
         }
       } catch (error) {
         console.error(error)
         saveAuth(undefined)
-        setStatus('The login details are incorrect')
+        setStatus('Something went wrong. Please try again.')
         setSubmitting(false)
         setLoading(false)
       }
     },
   })
+
+  // react-select styles that mirror Metronic's form-control look using CSS variables
+  const selectStyles = {
+    control: (base: any, state: any) => ({
+      ...base,
+      backgroundColor: 'var(--kt-input-bg)',
+      borderColor:
+        formik.touched.schoolId && formik.errors.schoolId
+          ? 'var(--kt-danger)'
+          : state.isFocused
+            ? 'var(--kt-primary)'
+            : 'var(--kt-input-border-color)',
+      borderRadius: '0.475rem',
+      padding: '0.1rem 0.25rem',
+      minHeight: '43.59px',
+      boxShadow: state.isFocused
+        ? '0 0 0 0.25rem color-mix(in srgb, var(--kt-primary) 25%, transparent)'
+        : 'none',
+      transition: 'border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
+      '&:hover': { borderColor: 'var(--kt-primary)' },
+    }),
+    menu: (base: any) => ({
+      ...base,
+      backgroundColor: 'var(--kt-dropdown-bg, #fff)',
+      border: '1px solid var(--kt-dropdown-border-color, #eff2f5)',
+      borderRadius: '0.475rem',
+      boxShadow: 'var(--kt-dropdown-box-shadow, 0px 0px 50px 0px rgba(82,63,105,0.15))',
+      zIndex: 9999,
+    }),
+    menuList: (base: any) => ({ ...base, padding: '0.5rem 0' }),
+    option: (base: any, state: any) => ({
+      ...base,
+      backgroundColor: state.isSelected
+        ? 'var(--kt-primary)'
+        : state.isFocused
+          ? 'var(--kt-component-hover-bg, #f9f9f9)'
+          : 'transparent',
+      color: state.isSelected ? '#fff' : 'var(--kt-input-color)',
+      padding: '0.65rem 1rem',
+      fontSize: '1rem',
+      cursor: 'pointer',
+    }),
+    singleValue: (base: any) => ({
+      ...base,
+      color: 'var(--kt-input-color)',
+      fontSize: '1rem',
+    }),
+    placeholder: (base: any) => ({
+      ...base,
+      color: 'var(--kt-input-placeholder-color)',
+      fontSize: '1rem',
+    }),
+    input: (base: any) => ({ ...base, color: 'var(--kt-input-color)' }),
+    indicatorSeparator: () => ({ display: 'none' }),
+    dropdownIndicator: (base: any) => ({
+      ...base,
+      color: 'var(--kt-gray-500)',
+      '&:hover': { color: 'var(--kt-gray-700)' },
+    }),
+    loadingMessage: (base: any) => ({
+      ...base,
+      color: 'var(--kt-text-muted)',
+      fontSize: '0.9rem',
+    }),
+    noOptionsMessage: (base: any) => ({
+      ...base,
+      color: 'var(--kt-text-muted)',
+      fontSize: '0.9rem',
+    }),
+  }
 
   return (
     <form
@@ -102,28 +157,59 @@ export function Login() {
       noValidate
       id='kt_login_signin_form'
     >
-      {/* begin::Heading */}
+      {/* ── Heading ── */}
       <div className='text-center mb-11'>
-        <h1 className='text-gray-900 fw-bolder mb-3'>Sign In</h1>
+        {/* App icon */}
+        <div className='d-flex justify-content-center mb-5'>
+          <span
+            className='d-flex align-items-center justify-content-center w-60px h-60px rounded-3 bg-primary bg-opacity-10'
+            style={{ width: 60, height: 60 }}
+          >
+            <i className='ki-duotone ki-element-11 fs-2tx text-primary'>
+              <span className='path1'></span>
+              <span className='path2'></span>
+              <span className='path3'></span>
+              <span className='path4'></span>
+            </i>
+          </span>
+        </div>
+        <h1 className='text-gray-900 fw-bolder mb-2' style={{ fontSize: '1.9rem', letterSpacing: '-0.5px' }}>
+          Welcome back
+        </h1>
         <div className='text-gray-500 fw-semibold fs-6'>EduAdmin Management System</div>
       </div>
-      {/* end::Heading */}
 
-      {/* begin::Role Switch */}
-      <div className='d-flex bg-light rounded p-1 mb-9'>
+      {/* ── Role Toggle ── */}
+      <div className='d-flex bg-light rounded-3 p-1 mb-9' style={{ gap: '4px' }}>
+        {/* Super Admin Tab */}
         <button
           type='button'
           onClick={() => {
             setLoginType('super_admin')
             formik.setFieldValue('loginType', 'super_admin')
+            formik.setFieldValue('schoolId', '')
           }}
           className={clsx(
-            'btn btn-sm flex-grow-1',
-            loginType === 'super_admin' ? 'btn-white shadow-sm' : 'btn-color-gray-500'
+            'btn btn-sm flex-grow-1 d-flex align-items-center justify-content-center gap-2 py-3',
+            loginType === 'super_admin'
+              ? 'btn-white shadow-sm text-primary fw-bolder'
+              : 'btn-color-gray-500 fw-semibold'
           )}
+          style={{ borderRadius: '0.4rem', transition: 'all 0.2s ease' }}
         >
+          <i
+            className={clsx(
+              'ki-duotone ki-shield-tick fs-4',
+              loginType === 'super_admin' ? 'text-primary' : 'text-gray-400'
+            )}
+          >
+            <span className='path1'></span>
+            <span className='path2'></span>
+          </i>
           Super Admin
         </button>
+
+        {/* School Admin Tab */}
         <button
           type='button'
           onClick={() => {
@@ -131,136 +217,237 @@ export function Login() {
             formik.setFieldValue('loginType', 'admin')
           }}
           className={clsx(
-            'btn btn-sm flex-grow-1',
-            loginType === 'admin' ? 'btn-white shadow-sm' : 'btn-color-gray-500'
+            'btn btn-sm flex-grow-1 d-flex align-items-center justify-content-center gap-2 py-3',
+            loginType === 'admin'
+              ? 'btn-white shadow-sm text-primary fw-bolder'
+              : 'btn-color-gray-500 fw-semibold'
           )}
+          style={{ borderRadius: '0.4rem', transition: 'all 0.2s ease' }}
         >
+          <i
+            className={clsx(
+              'ki-duotone ki-home-2 fs-4',
+              loginType === 'admin' ? 'text-primary' : 'text-gray-400'
+            )}
+          >
+            <span className='path1'></span>
+            <span className='path2'></span>
+          </i>
           School Admin
         </button>
       </div>
-      {/* end::Role Switch */}
 
+      {/* ── Status / Info Banner ── */}
       {formik.status ? (
-        <div className='mb-lg-15 alert alert-danger'>
-          <div className='alert-text font-weight-bold'>{formik.status}</div>
+        <div className='alert alert-danger d-flex align-items-center gap-3 mb-8 py-4 px-5 rounded-3'>
+          <i className='ki-duotone ki-information-5 fs-2hx text-danger flex-shrink-0'>
+            <span className='path1'></span>
+            <span className='path2'></span>
+            <span className='path3'></span>
+          </i>
+          <div>
+            <div className='fw-bold fs-6 text-danger'>Login Failed</div>
+            <div className='fw-semibold fs-7'>{formik.status}</div>
+          </div>
         </div>
       ) : (
-        <div className='mb-10 bg-light-info p-8 rounded'>
-          <div className='text-info'>
-            {loginType === 'super_admin' ? (
-              <>Use <strong>admin@myapp.com</strong> for Super Admin</>
-            ) : (
-              <>Use <strong>admin@sunbeam.com</strong> for School Admin</>
-            )}
+        <div
+          className='notice d-flex bg-light-primary rounded-3 border border-primary border-dashed mb-9 p-4'
+        >
+          <i className='ki-duotone ki-information fs-2tx text-primary me-4 flex-shrink-0'>
+            <span className='path1'></span>
+            <span className='path2'></span>
+            <span className='path3'></span>
+          </i>
+          <div className='d-flex flex-stack flex-grow-1'>
+            <div className='fw-semibold'>
+              <div className='fs-7 text-gray-700'>
+                Use{' '}
+                <span className='fw-bolder text-gray-900'>
+                  {loginType === 'super_admin' ? 'admin@myapp.com' : 'admin@sunbeam.com'}
+                </span>{' '}
+                to sign in as {loginType === 'super_admin' ? 'Super Admin' : 'School Admin'}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* begin::School Selection (Only for School Admin) */}
+      {/* ── School Selector (School Admin only) ── */}
       {loginType === 'admin' && (
         <div className='fv-row mb-8'>
-          <label className='form-label fs-6 fw-bolder text-gray-900'>Select School</label>
+          <label className='form-label fs-6 fw-bold text-gray-900 required'>
+            Select School
+          </label>
           <AsyncSelect
             cacheOptions
             defaultOptions
             loadOptions={loadSchoolOptions}
-            placeholder='Search school by code or name...'
-            onChange={(option: any) => {
+            placeholder='Search school by name or code...'
+            onChange={(option: any) =>
               formik.setFieldValue('schoolId', option ? option.value.toString() : '')
-            }}
+            }
             onBlur={() => formik.setFieldTouched('schoolId', true)}
-            classNamePrefix='react-select'
-            styles={{
-              control: (base) => ({
-                ...base,
-                backgroundColor: 'transparent',
-                borderColor: formik.touched.schoolId && formik.errors.schoolId ? '#f1416c' : '#E4E6EF',
-                padding: '0.25rem 0.5rem',
-                borderRadius: '0.475rem',
-                boxShadow: 'none',
-                minHeight: '43px',
-              }),
-            }}
+            styles={selectStyles}
           />
           {formik.touched.schoolId && formik.errors.schoolId && (
             <div className='fv-plugins-message-container mt-2'>
-              <span role='alert' className='text-danger'>{formik.errors.schoolId}</span>
+              <div className='fv-help-block d-flex align-items-center gap-1'>
+                <i className='ki-duotone ki-information-5 fs-6 text-danger'>
+                  <span className='path1'></span>
+                  <span className='path2'></span>
+                  <span className='path3'></span>
+                </i>
+                <span role='alert' className='text-danger fw-semibold fs-7'>
+                  {formik.errors.schoolId}
+                </span>
+              </div>
             </div>
           )}
         </div>
       )}
-      {/* end::School Selection */}
 
-      {/* begin::Form group */}
+      {/* ── Email ── */}
       <div className='fv-row mb-8'>
-        <label className='form-label fs-6 fw-bolder text-gray-900'>Email</label>
-        <input
-          placeholder='Email'
-          {...formik.getFieldProps('email')}
-          className={clsx(
-            'form-control bg-transparent',
-            { 'is-invalid': formik.touched.email && formik.errors.email },
-            {
-              'is-valid': formik.touched.email && !formik.errors.email,
-            }
-          )}
-          type='email'
-          name='email'
-          autoComplete='off'
-        />
+        <label className='form-label fw-bold text-gray-900 fs-6 required'>
+          Email Address
+        </label>
+        <div className='position-relative'>
+          <input
+            type='email'
+            placeholder='Enter your email'
+            autoComplete='off'
+            {...formik.getFieldProps('email')}
+            className={clsx(
+              'form-control bg-transparent pe-10',
+              { 'is-invalid': formik.touched.email && formik.errors.email },
+              { 'is-valid': formik.touched.email && !formik.errors.email }
+            )}
+          />
+          {/* Trailing state icon */}
+          <span
+            className='position-absolute top-50 end-0 translate-middle-y pe-3'
+            style={{ pointerEvents: 'none' }}
+          >
+            {formik.touched.email && formik.errors.email ? (
+              <i className='ki-duotone ki-cross-circle fs-3 text-danger'>
+                <span className='path1'></span>
+                <span className='path2'></span>
+              </i>
+            ) : formik.touched.email && !formik.errors.email ? (
+              <i className='ki-duotone ki-check-circle fs-3 text-success'>
+                <span className='path1'></span>
+                <span className='path2'></span>
+              </i>
+            ) : (
+              <i className='ki-duotone ki-sms fs-3 text-gray-400'>
+                <span className='path1'></span>
+                <span className='path2'></span>
+              </i>
+            )}
+          </span>
+        </div>
         {formik.touched.email && formik.errors.email && (
-          <div className='fv-plugins-message-container'>
-            <span role='alert'>{formik.errors.email}</span>
-          </div>
-        )}
-      </div>
-      {/* end::Form group */}
-
-      {/* begin::Form group */}
-      <div className='fv-row mb-3'>
-        <label className='form-label fw-bolder text-gray-900 fs-6 mb-0'>Password</label>
-        <input
-          type='password'
-          autoComplete='off'
-          {...formik.getFieldProps('password')}
-          className={clsx(
-            'form-control bg-transparent',
-            {
-              'is-invalid': formik.touched.password && formik.errors.password,
-            },
-            {
-              'is-valid': formik.touched.password && !formik.errors.password,
-            }
-          )}
-        />
-        {formik.touched.password && formik.errors.password && (
-          <div className='fv-plugins-message-container'>
-            <div className='fv-help-block'>
-              <span role='alert'>{formik.errors.password}</span>
+          <div className='fv-plugins-message-container mt-2'>
+            <div className='fv-help-block d-flex align-items-center gap-1'>
+              <i className='ki-duotone ki-information-5 fs-6 text-danger'>
+                <span className='path1'></span>
+                <span className='path2'></span>
+                <span className='path3'></span>
+              </i>
+              <span role='alert' className='text-danger fw-semibold fs-7'>
+                {formik.errors.email}
+              </span>
             </div>
           </div>
         )}
       </div>
-      {/* end::Form group */}
 
-      {/* begin::Action */}
+      {/* ── Password ── */}
+      <div className='fv-row mb-3'>
+        <label className='form-label fw-bold text-gray-900 fs-6 required'>Password</label>
+        <div className='position-relative'>
+          <input
+            type={showPassword ? 'text' : 'password'}
+            placeholder='Enter your password'
+            autoComplete='off'
+            {...formik.getFieldProps('password')}
+            className={clsx(
+              'form-control bg-transparent pe-10',
+              { 'is-invalid': formik.touched.password && formik.errors.password },
+              { 'is-valid': formik.touched.password && !formik.errors.password }
+            )}
+          />
+          {/* Show / Hide password toggle */}
+          <span
+            className='position-absolute top-50 end-0 translate-middle-y pe-3 cursor-pointer'
+            onClick={() => setShowPassword((v) => !v)}
+            title={showPassword ? 'Hide password' : 'Show password'}
+            style={{ zIndex: 5 }}
+          >
+            {showPassword ? (
+              <i className='ki-duotone ki-eye-slash fs-3 text-gray-400'>
+                <span className='path1'></span>
+                <span className='path2'></span>
+                <span className='path3'></span>
+                <span className='path4'></span>
+              </i>
+            ) : (
+              <i className='ki-duotone ki-eye fs-3 text-gray-400'>
+                <span className='path1'></span>
+                <span className='path2'></span>
+                <span className='path3'></span>
+              </i>
+            )}
+          </span>
+        </div>
+        {formik.touched.password && formik.errors.password && (
+          <div className='fv-plugins-message-container mt-2'>
+            <div className='fv-help-block d-flex align-items-center gap-1'>
+              <i className='ki-duotone ki-information-5 fs-6 text-danger'>
+                <span className='path1'></span>
+                <span className='path2'></span>
+                <span className='path3'></span>
+              </i>
+              <span role='alert' className='text-danger fw-semibold fs-7'>
+                {formik.errors.password}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Submit ── */}
       <div className='d-grid mb-10 mt-8'>
         <button
           type='submit'
           id='kt_sign_in_submit'
-          className='btn btn-primary'
+          className='btn btn-primary py-3 fs-6 fw-bolder'
           disabled={formik.isSubmitting || !formik.isValid}
         >
-          {!loading && <span className='indicator-label'>Continue</span>}
-          {loading && (
-            <span className='indicator-progress' style={{ display: 'block' }}>
-              Please wait...
-              <span className='spinner-border spinner-border-sm align-middle ms-2'></span>
+          {loading ? (
+            <span className='indicator-progress d-flex align-items-center justify-content-center gap-2'>
+              <span className='spinner-border spinner-border-sm align-middle'></span>
+              Signing in...
+            </span>
+          ) : (
+            <span className='indicator-label d-flex align-items-center justify-content-center gap-2'>
+              Sign In
+              <i className='ki-duotone ki-arrow-right fs-4'>
+                <span className='path1'></span>
+                <span className='path2'></span>
+              </i>
             </span>
           )}
         </button>
       </div>
-      {/* end::Action */}
+
+      {/* ── Footer note ── */}
+      <div className='text-center'>
+        <span className='text-muted fw-semibold fs-8 text-uppercase ls-1'>
+          Secure access · EduAdmin portal
+        </span>
+      </div>
     </form>
   )
 }
