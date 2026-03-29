@@ -3,7 +3,7 @@
 //
 
 // Reboot
-$app-bg-color: #fcfcfc;
+$app-bg-color: #F4F5FA;
 $app-bg-color-dark: $coal-400;
 $app-blank-bg-color: $app-bg-color;
 $app-blank-bg-color-dark: $app-bg-color-dark;
@@ -105,9 +105,9 @@ $app-aside-base-gap-bottom: $app-container-padding-x;
 
 // Toolbar base
 $app-toolbar-base-height: 55px;
-$app-toolbar-base-bg-color: $body-bg;
+$app-toolbar-base-bg-color: transparent;
 $app-toolbar-base-bg-color-dark: #131313;
-$app-toolbar-base-box-shadow: 0px 10px 30px 0px rgba(82, 63, 105, 0.05);
+$app-toolbar-base-box-shadow: none;
 $app-toolbar-base-box-shadow-dark: none;
 $app-toolbar-base-border-top: 1px dashed $border-dashed-color;
 $app-toolbar-base-border-top-dark: 1px dashed $border-dashed-color-dark;
