@@ -116,22 +116,20 @@ const AdministrationPage: FC = () => {
                 {/* Stats Row */}
                 <div className='row g-5 g-xl-10 mb-5 mb-xl-10'>
                     <div className='col-md-3'>
-                        <div className='card card-flush h-md-100 bg-light-warning'>
-                            <div className='card-header pt-5'>
-                                <div className='card-title d-flex flex-column'>
-                                    <span className='fs-2hx fw-bold text-gray-900 me-2 lh-1 ls-n2'>{pagination.total}</span>
-                                    <span className='text-gray-500 pt-1 fw-semibold fs-6'>Total Schools</span>
-                                </div>
+                        <div className='card h-md-100 border-0' style={{backgroundColor: '#7DA0FA', borderRadius: '15px', boxShadow: 'none'}}>
+                            <div className='card-body d-flex flex-column px-8 py-7'>
+                                <div className='text-white fw-medium fs-6 mb-3'>Total Schools</div>
+                                <div className='fs-2hx fw-bold text-white mb-1'>{pagination.total}</div>
+                                <div className='text-white opacity-75 fs-8'>Overall registered</div>
                             </div>
                         </div>
                     </div>
                     <div className='col-md-3'>
-                        <div className='card card-flush h-md-100 bg-light-success'>
-                            <div className='card-header pt-5'>
-                                <div className='card-title d-flex flex-column'>
-                                    <span className='fs-2hx fw-bold text-gray-900 me-2 lh-1 ls-n2'>{schools.filter(s => s.is_active).length}</span>
-                                    <span className='text-gray-500 pt-1 fw-semibold fs-6'>Active (This Page)</span>
-                                </div>
+                        <div className='card h-md-100 border-0 bg-primary' style={{borderRadius: '15px', boxShadow: 'none'}}>
+                            <div className='card-body d-flex flex-column px-8 py-7'>
+                                <div className='text-white fw-medium fs-6 mb-3'>Active (This Page)</div>
+                                <div className='fs-2hx fw-bold text-white mb-1'>{schools.filter(s => s.is_active).length}</div>
+                                <div className='text-white opacity-75 fs-8'>Currently running</div>
                             </div>
                         </div>
                     </div>

@@ -50,10 +50,10 @@ $grays: (
 // Bootstrap contextual colors
 // Primary colors
 
-$primary: #347f9e !default;
-$primary-active: #0D6684 !default;
-$primary-light: #E9F3FF !default;
-$primary-clarity: rgba(#1B84FF, 0.2) !default;
+$primary: #4B49AC !default;
+$primary-active: #383681 !default;
+$primary-light: #98BDFF !default;
+$primary-clarity: rgba(#4B49AC, 0.2) !default;
 $primary-inverse: $white !default;
 
 // Secondary colors
@@ -78,10 +78,10 @@ $success-clarity: rgba(#17C653, 0.2) !default;
 $success-inverse: $white !default;
 
 // Info colors
-$info: #7239EA !default;
-$info-active: #5014D0 !default;
-$info-light: #F8F5FF !default;
-$info-clarity: rgba(#7239EA, 0.2) !default;
+$info: #7978E9 !default;
+$info-active: #5E5DCC !default;
+$info-light: #EAEAFF !default;
+$info-clarity: rgba(#7978E9, 0.2) !default;
 $info-inverse: $white !default;
 
 // Warning colors
@@ -92,10 +92,10 @@ $warning-clarity: rgba(#F6C000, 0.2) !default;
 $warning-inverse: $white !default;
 
 // Danger colors
-$danger: #F8285A !default;
-$danger-active: #D81A48 !default;
-$danger-light: #FFEEF3 !default;
-$danger-clarity: rgba(#F8285A, 0.2) !default;
+$danger: #F3797E !default;
+$danger-active: #D95A5F !default;
+$danger-light: #FFEEF3 !default; // Retained a very light pink for light danger backgrounds
+$danger-clarity: rgba(#F3797E, 0.2) !default;
 $danger-inverse: $white !default;
 
 // Dark colors
