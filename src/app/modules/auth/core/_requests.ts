@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { AuthModel, UserModel, LoginResponse, SchoolCreationData, SchoolModel, SchoolResponse, SchoolsListResponse, ProfessionModel, ProfessionCreationData, ProfessionResponse, ProfessionsListResponse } from './_models'
+import { AuthModel, UserModel, LoginResponse, SchoolCreationData, SchoolModel, SchoolResponse, SchoolsListResponse, ProfessionModel, ProfessionCreationData, ProfessionResponse, ProfessionsListResponse, StaffModel, StaffCreationData, StaffResponse, StaffListResponse } from './_models'
 
 const API_URL = import.meta.env.VITE_APP_API_URL
 
@@ -11,6 +11,9 @@ export const GET_SCHOOLS_URL = `${API_URL}/admin/schools`
 
 export const GET_PROFESSIONS_URL = (schoolId: string | number) => `${API_URL}/school/${schoolId}/professions`
 export const PROFESSION_URL = (schoolId: string | number, id: string | number) => `${API_URL}/school/${schoolId}/professions/${id}`
+
+export const GET_STAFF_URL = (schoolId: string | number) => `${API_URL}/school/${schoolId}/administration`
+export const STAFF_URL = (schoolId: string | number, id: string | number) => `${API_URL}/school/${schoolId}/administration/${id}`
 
 export function login(email: string, password: string, role: string = 'admin', schoolId?: string) {
   let url = role === 'super_admin' ? SUPERADMIN_LOGIN_URL : `${API_URL}/school/${schoolId}/login`
@@ -84,4 +87,31 @@ export function toggleProfessionStatus(schoolId: string | number, id: string | n
 
 export function deleteProfession(schoolId: string | number, id: string | number) {
   return axios.delete(PROFESSION_URL(schoolId, id))
+}
+
+// --- Staff Requests ---
+export function getSchoolStaff(schoolId: string | number, page: number = 1, limit: number = 10,) {
+  return axios.get<StaffListResponse>(GET_STAFF_URL(schoolId), {
+    params: { page, limit, }
+  })
+}
+
+export function createSchoolStaff(schoolId: string | number, data: StaffCreationData) {
+  return axios.post<StaffResponse>(GET_STAFF_URL(schoolId), data)
+}
+
+export function updateSchoolStaff(schoolId: string | number, id: string | number, data: Partial<StaffCreationData>) {
+  return axios.put<StaffResponse>(STAFF_URL(schoolId, id), data)
+}
+
+export function updateStaffPermissions(schoolId: string | number, id: string | number, permissions: string[]) {
+  return axios.patch<StaffResponse>(`${STAFF_URL(schoolId, id)}/permissions`, { permissions })
+}
+
+export function toggleStaffStatus(schoolId: string | number, id: string | number) {
+  return axios.patch<StaffResponse>(`${STAFF_URL(schoolId, id)}/toggle-status`)
+}
+
+export function deleteSchoolStaff(schoolId: string | number, id: string | number) {
+  return axios.delete(STAFF_URL(schoolId, id))
 }

@@ -10,12 +10,22 @@ import * as RouteConfig from './RouteConfig'
 import { useAuth } from '../modules/auth'
 
 const PrivateRoutes = () => {
-  const { currentUser } = useAuth()
+  const { currentUser } = useAuth();
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isAdmin = currentUser?.role === 'admin';
+
+  const hasPermission = (moduleName: string) => {
+    if (isSuperAdmin || isAdmin) return true;
+    if (!currentUser?.permissions) return false;
+    return currentUser.permissions.includes(`view_${moduleName}`) || currentUser.permissions.includes(`manage_${moduleName}`);
+  };
+
   // Existing routes
   const StudentsPage = lazy(() => import('../modules/student/StudentsPage'))
   const AdministrationPage = lazy(() => import('../modules/administration/AdministrationPage'))
-  const CreateAdminPage = lazy(() => import('../modules/administration/CreateAdminPage'))
+  const SchoolAdminsPage = lazy(() => import('../modules/administration/SchoolAdminsPage'))
   const ProfessionsPage = lazy(() => import('../modules/administration/ProfessionsPage'))
+  
   const AdmissionPage = lazy(() => import('../modules/students/AdmissionPage').then(m => ({ default: m.AdmissionWrapper })))
   const EnrollmentPage = lazy(() => import('../modules/students/EnrollmentPage').then(m => ({ default: m.EnrollmentWrapper })))
   const StudentAttendancePage = lazy(() => import('../modules/students/AttendancePage').then(m => ({ default: m.AttendanceWrapper })))
@@ -25,56 +35,29 @@ const PrivateRoutes = () => {
   return (
     <Routes>
       <Route element={<MasterLayout />}>
-        <Route path='auth/*' element={<Navigate to={currentUser?.role === 'super_admin' ? '/administration' : '/dashboard'} />} />
+        <Route path='auth/*' element={<Navigate to={isSuperAdmin ? '/administration' : '/dashboard'} />} />
 
         {/* Redirect based on role */}
         <Route
           path='dashboard'
-          element={
-            currentUser?.role === 'super_admin' ? (
-              <Navigate to='/administration' />
-            ) : (
-              <DashboardWrapper />
-            )
-          }
+          element={isSuperAdmin ? <Navigate to='/administration' /> : <DashboardWrapper />}
         />
 
-        <Route path='administration' element={<Navigate to='/administration/schools' />} />
+        <Route path='administration' element={<Navigate to={isSuperAdmin ? '/administration/schools' : '/administration/staff'} />} />
+        
         <Route
           path='administration/schools'
-          element={
-            currentUser?.role === 'super_admin' ? (
-              <SuspensedView>
-                <AdministrationPage />
-              </SuspensedView>
-            ) : (
-              <Navigate to='/dashboard' />
-            )
-          }
+          element={isSuperAdmin ? <SuspensedView><AdministrationPage /></SuspensedView> : <Navigate to='/dashboard' />}
         />
+        
         <Route
-          path='administration/create-admin'
-          element={
-            currentUser?.role === 'super_admin' ? (
-              <SuspensedView>
-                <CreateAdminPage />
-              </SuspensedView>
-            ) : (
-              <Navigate to='/dashboard' />
-            )
-          }
+          path='administration/staff'
+          element={(isSuperAdmin || isAdmin || hasPermission('staff')) ? <SuspensedView><SchoolAdminsPage /></SuspensedView> : <Navigate to='/dashboard' />}
         />
+        
         <Route
           path='administration/professions'
-          element={
-            currentUser?.role === 'super_admin' ? (
-              <SuspensedView>
-                <ProfessionsPage />
-              </SuspensedView>
-            ) : (
-              <Navigate to='/dashboard' />
-            )
-          }
+          element={(isSuperAdmin || isAdmin || hasPermission('professions')) ? <SuspensedView><ProfessionsPage /></SuspensedView> : <Navigate to='/dashboard' />}
         />
 
         {/* Students */}

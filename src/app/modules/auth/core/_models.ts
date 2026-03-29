@@ -47,7 +47,9 @@ export interface UserModel {
   id: number
   name: string
   email: string
-  role: 'super_admin' | 'admin' | string
+  role: 'super_admin' | 'admin' | 'manager' | 'staff' | string
+  permissions?: string[]
+  schoolId?: number
   school_name?: string
   username?: string
   password?: string
@@ -168,6 +170,52 @@ export interface ProfessionsListResponse {
   message: string
   data: {
     professions: ProfessionModel[]
+  }
+  pagination?: {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+    hasNextPage: boolean
+    hasPrevPage: boolean
+  }
+}
+
+export interface StaffModel {
+  id: number
+  name: string
+  email: string
+  role: string
+  is_active: boolean
+  profession_id?: number | null
+  createdAt?: string
+  updatedAt?: string
+  permissions?: string[]
+}
+
+export interface StaffCreationData {
+  name: string
+  email: string
+  password?: string
+  role: string
+  profession_id?: number
+  is_active?: boolean
+}
+
+export interface StaffResponse {
+  success: boolean
+  message: string
+  data: {
+    staff?: StaffModel
+    admin?: StaffModel
+  }
+}
+
+export interface StaffListResponse {
+  success: boolean
+  message: string
+  data: {
+    staff: StaffModel[]
   }
   pagination?: {
     total: number
