@@ -3,7 +3,8 @@ import { useState } from 'react'
 import * as Yup from 'yup'
 import clsx from 'clsx'
 import { useFormik } from 'formik'
-import { getUserByToken, login } from '../core/_requests'
+import AsyncSelect from 'react-select/async'
+import { getUserByToken, login, getSchools } from '../core/_requests'
 import { AuthModel } from '../core/_models'
 import { toAbsoluteUrl } from '../../../../_metronic/helpers'
 import { useAuth } from '../core/Auth'
@@ -41,6 +42,22 @@ export function Login() {
   const [loading, setLoading] = useState(false)
   const [loginType, setLoginType] = useState<'super_admin' | 'admin'>('admin')
   const { saveAuth, setCurrentUser } = useAuth()
+
+  const loadSchoolOptions = async (inputValue: string) => {
+    try {
+      const response = await getSchools(1, 10, inputValue, true)
+      if (response && response.data && response.data.data && response.data.data.schools) {
+        return response.data.data.schools.map((school) => ({
+          value: school.id,
+          label: `${school.name} (${school.code})`,
+        }))
+      }
+      return []
+    } catch (error) {
+      console.error('Error fetching schools', error)
+      return []
+    }
+  }
 
   const formik = useFormik({
     initialValues,
@@ -139,31 +156,40 @@ export function Login() {
         </div>
       )}
 
-      {/* begin::School ID (Only for School Admin) */}
+      {/* begin::School Selection (Only for School Admin) */}
       {loginType === 'admin' && (
         <div className='fv-row mb-8'>
-          <label className='form-label fs-6 fw-bolder text-gray-900'>School ID</label>
-          <input
-            placeholder='e.g. 7'
-            {...formik.getFieldProps('schoolId')}
-            className={clsx(
-              'form-control bg-transparent',
-              { 'is-invalid': formik.touched.schoolId && formik.errors.schoolId },
-              {
-                'is-valid': formik.touched.schoolId && !formik.errors.schoolId,
-              }
-            )}
-            type='text'
-            name='schoolId'
-            autoComplete='off'
+          <label className='form-label fs-6 fw-bolder text-gray-900'>Select School</label>
+          <AsyncSelect
+            cacheOptions
+            defaultOptions
+            loadOptions={loadSchoolOptions}
+            placeholder='Search school by code or name...'
+            onChange={(option: any) => {
+              formik.setFieldValue('schoolId', option ? option.value.toString() : '')
+            }}
+            onBlur={() => formik.setFieldTouched('schoolId', true)}
+            classNamePrefix='react-select'
+            styles={{
+              control: (base) => ({
+                ...base,
+                backgroundColor: 'transparent',
+                borderColor: formik.touched.schoolId && formik.errors.schoolId ? '#f1416c' : '#E4E6EF',
+                padding: '0.25rem 0.5rem',
+                borderRadius: '0.475rem',
+                boxShadow: 'none',
+                minHeight: '43px',
+              }),
+            }}
           />
           {formik.touched.schoolId && formik.errors.schoolId && (
-            <div className='fv-plugins-message-container'>
-              <span role='alert'>{formik.errors.schoolId}</span>
+            <div className='fv-plugins-message-container mt-2'>
+              <span role='alert' className='text-danger'>{formik.errors.schoolId}</span>
             </div>
           )}
         </div>
       )}
+      {/* end::School Selection */}
 
       {/* begin::Form group */}
       <div className='fv-row mb-8'>
