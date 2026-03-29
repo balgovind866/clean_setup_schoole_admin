@@ -136,3 +136,45 @@ export interface SchoolsListResponse {
     hasPrevPage: boolean
   }
 }
+
+export interface ProfessionModel {
+  id: number
+  name: string
+  description?: string
+  category: "teaching" | "administrative" | "support" | "technical" | "other" | string
+  is_active: boolean
+  created_by?: number | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface ProfessionCreationData {
+  name: string
+  description?: string
+  category: string
+  is_active?: boolean
+}
+
+export interface ProfessionResponse {
+  success: boolean
+  message: string
+  data: {
+    profession?: ProfessionModel
+  }
+}
+
+export interface ProfessionsListResponse {
+  success: boolean
+  message: string
+  data: {
+    professions: ProfessionModel[]
+  }
+  pagination?: {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+    hasNextPage: boolean
+    hasPrevPage: boolean
+  }
+}

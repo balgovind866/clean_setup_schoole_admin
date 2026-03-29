@@ -14,6 +14,8 @@ const PrivateRoutes = () => {
   // Existing routes
   const StudentsPage = lazy(() => import('../modules/student/StudentsPage'))
   const AdministrationPage = lazy(() => import('../modules/administration/AdministrationPage'))
+  const CreateAdminPage = lazy(() => import('../modules/administration/CreateAdminPage'))
+  const ProfessionsPage = lazy(() => import('../modules/administration/ProfessionsPage'))
   const AdmissionPage = lazy(() => import('../modules/students/AdmissionPage').then(m => ({ default: m.AdmissionWrapper })))
   const EnrollmentPage = lazy(() => import('../modules/students/EnrollmentPage').then(m => ({ default: m.EnrollmentWrapper })))
   const StudentAttendancePage = lazy(() => import('../modules/students/AttendancePage').then(m => ({ default: m.AttendanceWrapper })))
@@ -37,12 +39,37 @@ const PrivateRoutes = () => {
           }
         />
 
+        <Route path='administration' element={<Navigate to='/administration/schools' />} />
         <Route
-          path='administration/*'
+          path='administration/schools'
           element={
             currentUser?.role === 'super_admin' ? (
               <SuspensedView>
                 <AdministrationPage />
+              </SuspensedView>
+            ) : (
+              <Navigate to='/dashboard' />
+            )
+          }
+        />
+        <Route
+          path='administration/create-admin'
+          element={
+            currentUser?.role === 'super_admin' ? (
+              <SuspensedView>
+                <CreateAdminPage />
+              </SuspensedView>
+            ) : (
+              <Navigate to='/dashboard' />
+            )
+          }
+        />
+        <Route
+          path='administration/professions'
+          element={
+            currentUser?.role === 'super_admin' ? (
+              <SuspensedView>
+                <ProfessionsPage />
               </SuspensedView>
             ) : (
               <Navigate to='/dashboard' />

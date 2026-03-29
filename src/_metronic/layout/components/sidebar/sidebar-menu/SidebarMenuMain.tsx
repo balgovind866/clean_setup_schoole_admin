@@ -13,12 +13,16 @@ const SidebarMenuMain = () => {
     <>
       {isSuperAdmin ? (
         <>
-          <SidebarMenuItem
+          <SidebarMenuItemWithSub
             to='/administration'
             icon='element-11'
             title='Administration'
             fontIcon='bi-app-indicator'
-          />
+          >
+            <SidebarMenuItem to='/administration/schools' title='Schools' hasBullet={true} />
+            <SidebarMenuItem to='/administration/create-admin' title='Create School Admin' hasBullet={true} />
+            <SidebarMenuItem to='/administration/professions' title='Professions' hasBullet={true} />
+          </SidebarMenuItemWithSub>
         </>
       ) : (
         <>

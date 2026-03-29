@@ -26,7 +26,7 @@ const loginSchema = Yup.object().shape({
 
 const initialValues = {
   email: 'admin@myapp.com',
-  password: 'demoAdmin@123456',
+  password: 'Admin@123456',
   schoolId: '',
   loginType: 'admin' as 'super_admin' | 'admin',
 }
