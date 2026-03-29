@@ -12,8 +12,12 @@ import {
     toggleProfessionStatus 
 } from '../auth/core/_requests'
 import { SchoolModel, ProfessionModel } from '../auth/core/_models'
+import { useAuth } from '../auth'
 
 const ProfessionsPage: FC = () => {
+    const { currentUser } = useAuth();
+    const isSuperAdmin = currentUser?.role === 'super_admin';
+
     // School Selection State
     const [schools, setSchools] = useState<SchoolModel[]>([]);
     const [selectedSchool, setSelectedSchool] = useState<string>('');
@@ -36,8 +40,13 @@ const ProfessionsPage: FC = () => {
     });
 
     useEffect(() => {
-        fetchSchools();
-    }, []);
+        if (isSuperAdmin) {
+            fetchSchools();
+        } else if (currentUser?.schoolId) {
+            // Setup target school directly for school admins
+            setSelectedSchool(currentUser.schoolId.toString());
+        }
+    }, [currentUser, isSuperAdmin]);
 
     useEffect(() => {
         if (selectedSchool) {
@@ -164,26 +173,28 @@ const ProfessionsPage: FC = () => {
                     </div>
                 )}
 
-                {/* Top Section: School Selector */}
-                <div className='card card-flush mb-6'>
-                    <div className='card-header py-5'>
-                        <div className='card-title w-100 me-0'>
-                            <div className='d-flex flex-column w-100'>
-                                <label className='form-label fs-5 fw-bold text-gray-800'>Context: Select Target School</label>
-                                <select 
-                                    className='form-select form-select-solid fw-bolder'
-                                    value={selectedSchool} 
-                                    onChange={(e) => setSelectedSchool(e.target.value)}
-                                >
-                                    <option value=''>--- Select a School ---</option>
-                                    {schools.map(school => (
-                                        <option key={school.id} value={school.id}>{school.name} ({school.code})</option>
-                                    ))}
-                                </select>
+                {/* Top Section: School Selector (Super Admin Only) */}
+                {isSuperAdmin && (
+                    <div className='card card-flush mb-6'>
+                        <div className='card-header py-5'>
+                            <div className='card-title w-100 me-0'>
+                                <div className='d-flex flex-column w-100'>
+                                    <label className='form-label fs-5 fw-bold text-gray-800'>Context: Select Target School</label>
+                                    <select 
+                                        className='form-select form-select-solid fw-bolder'
+                                        value={selectedSchool} 
+                                        onChange={(e) => setSelectedSchool(e.target.value)}
+                                    >
+                                        <option value=''>--- Select a School ---</option>
+                                        {schools.map(school => (
+                                            <option key={school.id} value={school.id}>{school.name} ({school.code})</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* Main Content Area */}
                 {selectedSchool ? (
