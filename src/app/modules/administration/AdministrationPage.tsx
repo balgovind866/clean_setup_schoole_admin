@@ -3,7 +3,7 @@ import { PageTitle } from '../../../_metronic/layout/core'
 import { ToolbarWrapper } from '../../../_metronic/layout/components/toolbar'
 import { Content } from '../../../_metronic/layout/components/content'
 import { Modal, Button, Alert } from 'react-bootstrap'
-import { createSchool, getSchools } from '../auth/core/_requests'
+import { createSchool, getSchools, updateSchool, toggleSchoolStatus, deleteSchool } from '../auth/core/_requests'
 import { SchoolModel } from '../auth/core/_models'
 import { useEffect } from 'react'
 
@@ -58,53 +58,110 @@ const AdministrationPage: FC = () => {
         db_password: "",
         address: "",
         phone: "",
-        email: ""
+        email: "",
+        logoPath: ""
     });
 
     // Filtered is now handled by API
     const filtered = schools;
 
-    const handleAddSchool = async () => {
+    const [editSchoolId, setEditSchoolId] = useState<number | null>(null);
+
+    const openAddModal = () => {
+        setEditSchoolId(null);
+        setNewSchool({
+            name: "", code: "", subdomain: "", db_host: "localhost", db_port: 5432,
+            db_username: "postgres", db_password: "", address: "", phone: "", email: "", logoPath: ""
+        });
+        setError(null);
+        setShowModal(true);
+    };
+
+    const handleEditClick = (school: SchoolModel) => {
+        setEditSchoolId(school.id);
+        setNewSchool({
+            name: school.name,
+            code: school.code,
+            subdomain: school.subdomain,
+            db_host: school.db_host || "localhost",
+            db_port: school.db_port || 5432,
+            db_username: school.db_username || "postgres",
+            db_password: "", // Avoid loading real password
+            address: school.address || "",
+            phone: school.phone || "",
+            email: school.email || "",
+            logoPath: school.logoPath || ""
+        });
+        setError(null);
+        setShowModal(true);
+    };
+
+    const handleSaveSchool = async () => {
         setLoading(true);
         setError(null);
         try {
-            const { data: response } = await createSchool({
-                name: newSchool.name,
-                code: newSchool.code,
-                subdomain: newSchool.subdomain,
-                db_host: newSchool.db_host,
-                db_port: Number(newSchool.db_port),
-                db_username: newSchool.db_username,
-                db_password: newSchool.db_password,
-                address: newSchool.address,
-                phone: newSchool.phone,
-                email: newSchool.email
-            });
+            if (editSchoolId) {
+                // Use limited payload for updates as per backend constraints
+                const updatePayload = {
+                    name: newSchool.name,
+                    logoPath: newSchool.logoPath || "https://example.com/images/default-logo.png"
+                };
+                
+                const { data: response } = await updateSchool(editSchoolId, updatePayload);
+                if (response.success) {
+                    setSchools(schools.map(s => s.id === editSchoolId ? { ...s, ...response.data.school } : s));
+                    setShowModal(false);
+                }
+            } else {
+                const payload = {
+                    name: newSchool.name,
+                    code: newSchool.code,
+                    subdomain: newSchool.subdomain,
+                    db_host: newSchool.db_host,
+                    db_port: Number(newSchool.db_port),
+                    db_username: newSchool.db_username,
+                    db_password: newSchool.db_password,
+                    address: newSchool.address,
+                    phone: newSchool.phone,
+                    email: newSchool.email
+                };
 
-            if (response.success) {
-                setSchools([...schools, {
-                    ...response.data.school,
-                    principalName: "Pending...",
-                }]);
-                setShowModal(false);
-                setNewSchool({
-                    name: "",
-                    code: "",
-                    subdomain: "",
-                    db_host: "localhost",
-                    db_port: 5432,
-                    db_username: "postgres",
-                    db_password: "",
-                    address: "",
-                    phone: "",
-                    email: ""
-                });
+                const { data: response } = await createSchool(payload);
+                if (response.success) {
+                    setSchools([...schools, {
+                        ...response.data.school,
+                        principalName: "Pending...",
+                    }]);
+                    setShowModal(false);
+                }
             }
         } catch (err: any) {
             console.error(err);
-            setError(err.response?.data?.message || err.message || "Failed to create school");
+            setError(err.response?.data?.message || err.message || "Failed to save school");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleToggleStatus = async (school: SchoolModel) => {
+        if (!window.confirm(`Are you sure you want to ${school.is_active ? 'deactivate' : 'activate'} this school?`)) return;
+        try {
+            const { data } = await toggleSchoolStatus(school.id);
+            if (data.success) {
+                setSchools(schools.map(s => s.id === school.id ? { ...s, is_active: !s.is_active } : s));
+            }
+        } catch (err: any) {
+            alert(err.response?.data?.message || err.message || "Failed to toggle status");
+        }
+    };
+
+    const handleDeleteSchool = async (id: number) => {
+        if (!window.confirm('Are you sure you want to permanently delete this school?')) return;
+        try {
+            await deleteSchool(id, true);
+            setSchools(schools.filter(s => s.id !== id));
+        } catch (err: any) {
+            alert(err.response?.data?.message || err.message || "Failed to delete school");
         }
     };
 
@@ -151,7 +208,7 @@ const AdministrationPage: FC = () => {
                             </div>
                         </div>
                         <div className='card-toolbar'>
-                            <button className='btn btn-primary' onClick={() => setShowModal(true)}>Add School</button>
+                            <button className='btn btn-primary' onClick={openAddModal}>Add School</button>
                         </div>
                     </div>
                     <div className='card-body pt-0'>
@@ -202,7 +259,23 @@ const AdministrationPage: FC = () => {
                                                 </div>
                                             </td>
                                             <td className='text-end'>
-                                                <button className='btn btn-sm btn-light btn-active-light-primary'>Edit</button>
+                                                <div className='d-flex justify-content-end flex-shrink-0'>
+                                                    <button onClick={() => handleToggleStatus(school)} className={`btn btn-icon btn-bg-light btn-active-color-${school.is_active ? 'warning' : 'success'} btn-sm me-1`} title={school.is_active ? 'Deactivate' : 'Activate'}>
+                                                        <i className={`ki-duotone ${school.is_active ? 'ki-cross-circle' : 'ki-check-circle'} fs-2`}>
+                                                            <span className='path1'></span><span className='path2'></span>
+                                                        </i>
+                                                    </button>
+                                                    <button onClick={() => handleEditClick(school)} className='btn btn-icon btn-bg-light btn-active-color-primary btn-sm me-1' title='Edit'>
+                                                        <i className='ki-duotone ki-pencil fs-2'>
+                                                            <span className='path1'></span><span className='path2'></span>
+                                                        </i>
+                                                    </button>
+                                                    <button onClick={() => handleDeleteSchool(school.id)} className='btn btn-icon btn-bg-light btn-active-color-danger btn-sm' title='Delete'>
+                                                        <i className='ki-duotone ki-trash fs-2'>
+                                                            <span className='path1'></span><span className='path2'></span><span className='path3'></span><span className='path4'></span><span className='path5'></span>
+                                                        </i>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
@@ -257,7 +330,7 @@ const AdministrationPage: FC = () => {
             {/* Add School Modal */}
             <Modal show={showModal} onHide={() => setShowModal(false)} size='lg' centered>
                 <Modal.Header closeButton>
-                    <Modal.Title>Add New School</Modal.Title>
+                    <Modal.Title>{editSchoolId ? 'Edit School' : 'Add New School'}</Modal.Title>
                 </Modal.Header>
                 <Modal.Body className='py-10 px-lg-17'>
                     {error && <Alert variant='danger'>{error}</Alert>}
@@ -271,18 +344,27 @@ const AdministrationPage: FC = () => {
                             </div>
                             <div className='col-md-6 fv-row'>
                                 <label className='d-flex align-items-center fs-6 fw-semibold mb-2'>
-                                    <span className='required'>School Code</span>
+                                    <span className={!editSchoolId ? 'required' : ''}>School Code</span>
                                 </label>
-                                <input type='text' className='form-control form-control-solid' placeholder='School Code' value={newSchool.code} onChange={(e) => setNewSchool({ ...newSchool, code: e.target.value })} />
+                                <input type='text' className='form-control form-control-solid' placeholder='School Code' value={newSchool.code} onChange={(e) => setNewSchool({ ...newSchool, code: e.target.value })} disabled={!!editSchoolId} />
                             </div>
                         </div>
 
+                        {editSchoolId && (
+                            <div className='d-flex flex-column mb-8 fv-row'>
+                                <label className='d-flex align-items-center fs-6 fw-semibold mb-2'>
+                                    <span>Logo URL</span>
+                                </label>
+                                <input type='text' className='form-control form-control-solid' placeholder='https://example.com/logo.png' value={newSchool.logoPath} onChange={(e) => setNewSchool({ ...newSchool, logoPath: e.target.value })} />
+                            </div>
+                        )}
+
                         <div className='d-flex flex-column mb-8 fv-row'>
                             <label className='d-flex align-items-center fs-6 fw-semibold mb-2'>
-                                <span className='required'>Subdomain</span>
+                                <span className={!editSchoolId ? 'required' : ''}>Subdomain</span>
                             </label>
                             <div className='input-group input-group-solid'>
-                                <input type='text' className='form-control' placeholder='subdomain' value={newSchool.subdomain} onChange={(e) => setNewSchool({ ...newSchool, subdomain: e.target.value })} />
+                                <input type='text' className='form-control' placeholder='subdomain' value={newSchool.subdomain} onChange={(e) => setNewSchool({ ...newSchool, subdomain: e.target.value })} disabled={!!editSchoolId} />
                                 <span className='input-group-text'>.eduadmin.com</span>
                             </div>
                         </div>
@@ -303,36 +385,40 @@ const AdministrationPage: FC = () => {
                             <textarea className='form-control form-control-solid' rows={2} placeholder='School Address' value={newSchool.address} onChange={(e) => setNewSchool({ ...newSchool, address: e.target.value })} />
                         </div>
 
-                        <div className='separator separator-dashed my-10'></div>
-                        <h4 className='fw-bold mb-5'>Database Configuration</h4>
+                        {!editSchoolId && (
+                            <>
+                                <div className='separator separator-dashed my-10'></div>
+                                <h4 className='fw-bold mb-5'>Database Configuration</h4>
 
-                        <div className='row g-9 mb-8'>
-                            <div className='col-md-8 fv-row'>
-                                <label className='fs-6 fw-semibold mb-2 required'>DB Host</label>
-                                <input type='text' className='form-control form-control-solid' placeholder='localhost' value={newSchool.db_host} onChange={(e) => setNewSchool({ ...newSchool, db_host: e.target.value })} />
-                            </div>
-                            <div className='col-md-4 fv-row'>
-                                <label className='fs-6 fw-semibold mb-2 required'>DB Port</label>
-                                <input type='number' className='form-control form-control-solid' placeholder='5432' value={newSchool.db_port} onChange={(e) => setNewSchool({ ...newSchool, db_port: Number(e.target.value) })} />
-                            </div>
-                        </div>
+                                <div className='row g-9 mb-8'>
+                                    <div className='col-md-8 fv-row'>
+                                        <label className='fs-6 fw-semibold mb-2 required'>DB Host</label>
+                                        <input type='text' className='form-control form-control-solid' placeholder='localhost' value={newSchool.db_host} onChange={(e) => setNewSchool({ ...newSchool, db_host: e.target.value })} />
+                                    </div>
+                                    <div className='col-md-4 fv-row'>
+                                        <label className='fs-6 fw-semibold mb-2 required'>DB Port</label>
+                                        <input type='number' className='form-control form-control-solid' placeholder='5432' value={newSchool.db_port} onChange={(e) => setNewSchool({ ...newSchool, db_port: Number(e.target.value) })} />
+                                    </div>
+                                </div>
 
-                        <div className='row g-9 mb-8'>
-                            <div className='col-md-6 fv-row'>
-                                <label className='fs-6 fw-semibold mb-2 required'>DB Username</label>
-                                <input type='text' className='form-control form-control-solid' placeholder='postgres' value={newSchool.db_username} onChange={(e) => setNewSchool({ ...newSchool, db_username: e.target.value })} />
-                            </div>
-                            <div className='col-md-6 fv-row'>
-                                <label className='fs-6 fw-semibold mb-2 required'>DB Password</label>
-                                <input type='password' name='db_password' className='form-control form-control-solid' placeholder='DB Password' value={newSchool.db_password} onChange={(e) => setNewSchool({ ...newSchool, db_password: e.target.value })} />
-                            </div>
-                        </div>
+                                <div className='row g-9 mb-8'>
+                                    <div className='col-md-6 fv-row'>
+                                        <label className='fs-6 fw-semibold mb-2 required'>DB Username</label>
+                                        <input type='text' className='form-control form-control-solid' placeholder='postgres' value={newSchool.db_username} onChange={(e) => setNewSchool({ ...newSchool, db_username: e.target.value })} />
+                                    </div>
+                                    <div className='col-md-6 fv-row'>
+                                        <label className='fs-6 fw-semibold mb-2'>DB Password</label>
+                                        <input type='password' name='db_password' className='form-control form-control-solid' placeholder='DB Password' value={newSchool.db_password} onChange={(e) => setNewSchool({ ...newSchool, db_password: e.target.value })} />
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </Modal.Body>
                 <Modal.Footer className='flex-center'>
                     <Button variant='light' onClick={() => setShowModal(false)} className='me-3' disabled={loading}>Cancel</Button>
-                    <Button variant='primary' onClick={handleAddSchool} disabled={loading}>
-                        {loading ? 'Creating...' : 'Add School'}
+                    <Button variant='primary' onClick={handleSaveSchool} disabled={loading}>
+                        {loading ? 'Saving...' : editSchoolId ? 'Save Changes' : 'Add School'}
                     </Button>
                 </Modal.Footer>
             </Modal>

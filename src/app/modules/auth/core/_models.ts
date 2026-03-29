@@ -91,6 +91,7 @@ export interface SchoolModel {
   phone?: string
   email?: string
   address?: string
+  logoPath?: string
 }
 
 export interface SchoolCreationData {
@@ -104,6 +105,7 @@ export interface SchoolCreationData {
   address: string
   phone: string
   email: string
+  logoPath?: string
 }
 
 export interface SchoolResponse {

@@ -8,6 +8,7 @@ export const SUPERADMIN_LOGIN_URL = `${API_URL}/admin/login`
 export const GET_USER_BY_TOKEN_URL = `${API_URL}/verify_token`
 export const CREATE_SCHOOL_URL = `${API_URL}/admin/schools`
 export const GET_SCHOOLS_URL = `${API_URL}/admin/schools`
+export const SCHOOL_URL = (id: string | number) => `${API_URL}/admin/schools/${id}`
 
 export const GET_PROFESSIONS_URL = (schoolId: string | number) => `${API_URL}/school/${schoolId}/professions`
 export const PROFESSION_URL = (schoolId: string | number, id: string | number) => `${API_URL}/school/${schoolId}/professions/${id}`
@@ -37,6 +38,18 @@ export function getSchools(page: number, limit: number, search: string = '', isA
       is_active: isActive
     }
   })
+}
+
+export function updateSchool(id: string | number, schoolData: Partial<SchoolCreationData>) {
+  return axios.put<SchoolResponse>(SCHOOL_URL(id), schoolData)
+}
+
+export function toggleSchoolStatus(id: string | number) {
+  return axios.patch<SchoolResponse>(`${SCHOOL_URL(id)}/toggle-status`)
+}
+
+export function deleteSchool(id: string | number, permanent: boolean = false) {
+  return axios.delete(SCHOOL_URL(id), { params: { permanent } })
 }
 
 // Server should return AuthModel
