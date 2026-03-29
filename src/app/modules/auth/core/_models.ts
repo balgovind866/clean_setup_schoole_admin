@@ -52,6 +52,8 @@ export interface UserModel {
   permissions?: string[]
   schoolId?: number
   school_name?: string
+  school_logo?: string
+  school_code?: string
   username?: string
   password?: string
   first_name?: string

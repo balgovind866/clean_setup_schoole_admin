@@ -4,6 +4,7 @@ import {KTIcon, toAbsoluteUrl} from '../../../helpers'
 import {useLayout} from '../../core'
 import {MutableRefObject, useEffect, useRef} from 'react'
 import {ToggleComponent} from '../../../assets/ts/components'
+import {useAuth} from '../../../../app/modules/auth'
 
 type PropsType = {
   sidebarRef: MutableRefObject<HTMLDivElement | null>
@@ -12,6 +13,11 @@ type PropsType = {
 const SidebarLogo = (props: PropsType) => {
   const {config} = useLayout()
   const toggleRef = useRef<HTMLDivElement>(null)
+  const {currentUser} = useAuth()
+
+  const defaultLogo = 'https://structural-violet-zsgcfeuhrx.edgeone.app/1.png'
+  const logoUrl = currentUser?.school_logo || defaultLogo
+  const schoolName = currentUser?.school_name || 'Administration'
 
   const appSidebarDefaultMinimizeDesktopEnabled =
     config?.app?.sidebar?.default?.minimize?.desktop?.enabled
@@ -49,32 +55,23 @@ const SidebarLogo = (props: PropsType) => {
 
   return (
     <div className='app-sidebar-logo px-6' id='kt_app_sidebar_logo'>
-      <Link to='/dashboard'>
-        {config.layoutType === 'dark-sidebar' ? (
+      <Link to='/dashboard' className='d-flex align-items-center' style={{textDecoration: 'none'}}>
+        <div className='d-flex align-items-center app-sidebar-logo-default' style={{gap: '10px'}}>
           <img
-            alt='Logo'
-            src={toAbsoluteUrl('media/logos/default-dark.svg')}
-            className='h-25px app-sidebar-logo-default'
+            alt='School Logo'
+            src={logoUrl}
+            style={{height: '35px', width: 'auto', borderRadius: '4px'}}
           />
-        ) : (
-          <>
-            <img
-              alt='Logo'
-              src={toAbsoluteUrl('media/logos/default.svg')}
-              className='h-25px app-sidebar-logo-default theme-light-show'
-            />
-            <img
-              alt='Logo'
-              src={toAbsoluteUrl('media/logos/default-dark.svg')}
-              className='h-25px app-sidebar-logo-default theme-dark-show'
-            />
-          </>
-        )}
+          <span className={`fw-bold fs-4 mb-0 ${config.layoutType === 'dark-sidebar' ? 'text-white' : 'text-gray-900'}`} style={{whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+            {schoolName}
+          </span>
+        </div>
 
         <img
           alt='Logo'
-          src={toAbsoluteUrl('media/logos/default-small.svg')}
-          className='h-20px app-sidebar-logo-minimize'
+          src={logoUrl}
+          className='h-25px app-sidebar-logo-minimize'
+          style={{borderRadius: '4px'}}
         />
       </Link>
 
