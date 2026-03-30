@@ -7,7 +7,7 @@ import { useAuth } from '../auth'
 import {
   admitStudent, getStudents, getStudentById,
   updateStudentProfile, updateStudentParent, updateStudentAddress,
-  uploadDocument, enrollStudent, getStudentDocuments,
+  uploadDocument, enrollStudent, getStudentDocuments, toggleStudentStatus,
 } from './core/_requests'
 import { getClasses, getClassSections, getAcademicSessions } from '../academic/core/_requests'
 import {
@@ -58,11 +58,11 @@ const AdmissionPage: FC = () => {
   const [profileForm, setProfileForm] = useState<StudentProfilePayload>({ dob: '', gender: 'male', blood_group: 'B+', nationality: 'Indian', category: 'General' })
   const [parentForm, setParentForm] = useState<StudentParentPayload>({ father_name: '', father_phone: '', father_occupation: '', mother_name: '', mother_phone: '', mother_occupation: '' })
   const [addrForm, setAddrForm] = useState<StudentAddressPayload>({ current_address: '', current_city: '', current_state: '', current_pincode: '', is_same_as_current: true, permanent_address: '', permanent_city: '', permanent_state: '', permanent_pincode: '' })
-  
+
   // Documents
   const [docs, setDocs] = useState<StudentDocumentModel[]>([])
   const [docForm, setDocForm] = useState({ document_type: 'AadharCard' as DocumentType, file_path: '' })
-  
+
   // Enrollment
   const [sessions, setSessions] = useState<SessionModel[]>([])
   const [classes, setClasses] = useState<ClassModel[]>([])
@@ -86,7 +86,7 @@ const AdmissionPage: FC = () => {
   const loadMeta = useCallback(async () => {
     if (!schoolId) return
     try {
-      const [sRes, cRes] = await Promise.all([ getAcademicSessions(schoolId, 1, 100), getClasses(schoolId, 1, 100) ])
+      const [sRes, cRes] = await Promise.all([getAcademicSessions(schoolId, 1, 100), getClasses(schoolId, 1, 100)])
       if (sRes.data.success) setSessions(sRes.data.data.sessions || [])
       if (cRes.data.success) setClasses(cRes.data.data.classes || [])
     } catch { }
@@ -133,7 +133,7 @@ const AdmissionPage: FC = () => {
       if (s.profile) setProfileForm({ dob: s.profile.dob || '', gender: s.profile.gender, blood_group: s.profile.blood_group, nationality: s.profile.nationality, category: s.profile.category })
       if (s.parent) setParentForm({ father_name: s.parent.father_name, father_phone: s.parent.father_phone, father_occupation: s.parent.father_occupation, mother_name: s.parent.mother_name, mother_phone: s.parent.mother_phone, mother_occupation: s.parent.mother_occupation })
       if (s.address) setAddrForm({ current_address: s.address.current_address, current_city: s.address.current_city, current_state: s.address.current_state, current_pincode: s.address.current_pincode, is_same_as_current: s.address.is_same_as_current, permanent_address: s.address.permanent_address || '', permanent_city: s.address.permanent_city || '', permanent_state: s.address.permanent_state || '', permanent_pincode: s.address.permanent_pincode || '' })
-      
+
       const enroll = s.enrollments?.[0]
       if (enroll) {
         setEnrollForm({ academic_session_id: String(enroll.academic_session_id), class_id: String(enroll.class_section?.class?.id || ''), class_section_id: String(enroll.class_section_id), roll_number: enroll.roll_number, enrollment_date: enroll.enrollment_date.split('T')[0] })
@@ -159,7 +159,7 @@ const AdmissionPage: FC = () => {
     try {
       await updateStudentProfile(schoolId, selectedStudent.id, profileForm)
       successToast('Profile updated successfully!')
-    } catch (err: any) { setManageError(err.response?.data?.message || 'Error saving profile') } 
+    } catch (err: any) { setManageError(err.response?.data?.message || 'Error saving profile') }
     finally { setManageSaving(false) }
   }
 
@@ -170,7 +170,7 @@ const AdmissionPage: FC = () => {
     try {
       await updateStudentParent(schoolId, selectedStudent.id, parentForm)
       successToast('Parent details saved successfully!')
-    } catch (err: any) { setManageError(err.response?.data?.message || 'Error saving parent info') } 
+    } catch (err: any) { setManageError(err.response?.data?.message || 'Error saving parent info') }
     finally { setManageSaving(false) }
   }
 
@@ -184,7 +184,7 @@ const AdmissionPage: FC = () => {
         : { ...addrForm }
       await updateStudentAddress(schoolId, selectedStudent.id, payload)
       successToast('Address saved successfully!')
-    } catch (err: any) { setManageError(err.response?.data?.message || 'Error saving address') } 
+    } catch (err: any) { setManageError(err.response?.data?.message || 'Error saving address') }
     finally { setManageSaving(false) }
   }
 
@@ -197,7 +197,7 @@ const AdmissionPage: FC = () => {
       if (data.success) setDocs(data.data.documents || [])
       setDocForm({ document_type: 'AadharCard', file_path: '' })
       successToast('Document added!')
-    } catch (err: any) { setManageError(err.response?.data?.message || 'Error adding document') } 
+    } catch (err: any) { setManageError(err.response?.data?.message || 'Error adding document') }
     finally { setManageSaving(false) }
   }
 
@@ -213,8 +213,18 @@ const AdmissionPage: FC = () => {
         enrollment_date: enrollForm.enrollment_date,
       })
       successToast('Student enrolled successfully!')
-    } catch (err: any) { setManageError(err.response?.data?.message || 'Error enrolling student') } 
+    } catch (err: any) { setManageError(err.response?.data?.message || 'Error enrolling student') }
     finally { setManageSaving(false) }
+  }
+
+  const handleToggleStatus = async (student: StudentModel) => {
+    try {
+      await toggleStudentStatus(schoolId, student.id)
+      successToast(`Student ${student.first_name} marked as ${student.is_active ? 'Inactive' : 'Active'}`)
+      // Not calling fetchStudents directly here if successToast already does it
+    } catch (err: any) {
+      setListError(err.response?.data?.message || 'Failed to toggle status')
+    }
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -231,7 +241,7 @@ const AdmissionPage: FC = () => {
 
   const CheckIcon = ({ exists }: { exists: boolean }) => (
     exists ? <i className="ki-duotone ki-check-circle fs-2 text-success" title="Completed"><span className="path1"></span><span className="path2"></span></i>
-           : <i className="ki-duotone ki-cross-circle fs-2 text-gray-400" title="Missing"><span className="path1"></span><span className="path2"></span></i>
+      : <i className="ki-duotone ki-cross-circle fs-2 text-gray-400" title="Missing"><span className="path1"></span><span className="path2"></span></i>
   )
 
   return (
@@ -315,61 +325,104 @@ const AdmissionPage: FC = () => {
                     // Resilient checks for objects or arrays to handle multiple variations from backend API
                     const hasProfile = s.profile && (Array.isArray(s.profile) ? s.profile.length > 0 : Object.keys(s.profile).length > 0);
                     const hasParent = s.parent && (Array.isArray(s.parent) ? s.parent.length > 0 : Object.keys(s.parent).length > 0);
-                    
+
                     const addrObj = s.address || (s as any).addresses;
                     const hasAddress = Array.isArray(addrObj) ? addrObj.length > 0 : !!addrObj && Object.keys(addrObj).length > 0;
 
                     const docsObj = s.documents || (s as any).document;
-                    const docsCount = Array.isArray(docsObj) ? docsObj.length : (docsObj ? 1 : 0);
+                    const docsArray = Array.isArray(docsObj) ? docsObj : (docsObj ? [docsObj] : []);
+                    const docsCount = docsArray.length;
+                    const verifiedCount = docsArray.filter((d: any) => d.verification_status === 'Verified').length;
+                    const pendingCount = docsArray.filter((d: any) => d.verification_status === 'Pending').length;
+                    const rejectedCount = docsArray.filter((d: any) => d.verification_status === 'Rejected').length;
 
                     const enrollObj = s.enrollments || (s as any).enrollment;
                     const hasEnrollment = Array.isArray(enrollObj) ? enrollObj.length > 0 : !!enrollObj && Object.keys(enrollObj).length > 0;
 
                     return (
-                    <tr key={s.id}>
-                      <td><span className='text-gray-500'>{idx + 1}</span></td>
-                      <td>
-                        <div className='d-flex align-items-center'>
-                          <div className='symbol symbol-40px me-3'>
-                            <div className='symbol-label fs-3 fw-bold text-primary bg-light-primary'>
-                              {s.first_name.charAt(0).toUpperCase()}
+                      <tr key={s.id}>
+                        <td><span className='text-gray-500'>{idx + 1}</span></td>
+                        <td>
+                          <div className='d-flex align-items-center'>
+                            <div className='symbol symbol-40px me-3'>
+                              <div className='symbol-label fs-3 fw-bold text-primary bg-light-primary'>
+                                {s.first_name.charAt(0).toUpperCase()}
+                              </div>
+                            </div>
+                            <div>
+                              <div className='text-gray-800 fw-bold'>{s.first_name} {s.last_name}</div>
+                              <div className='text-muted fs-7'>{s.email}</div>
                             </div>
                           </div>
-                          <div>
-                            <div className='text-gray-800 fw-bold'>{s.first_name} {s.last_name}</div>
-                            <div className='text-muted fs-7'>{s.email}</div>
+                        </td>
+                        <td>
+                          <div className='text-gray-800 fw-bold fs-7 mb-2'>{s.mobile_number}</div>
+                          <div
+                            className='d-flex align-items-center gap-2 cursor-pointer'
+                            onClick={() => handleToggleStatus(s)}
+                          >
+                            {/* Circular toggle button like in image */}
+                            <div
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: '50%',
+                                border: `3px solid ${s.is_active ? '#7F77DD' : '#ccc'}`,
+                                backgroundColor: s.is_active ? 'transparent' : 'transparent',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'border-color 0.2s',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: '50%',
+                                  backgroundColor: s.is_active ? '#7F77DD' : '#ccc',
+                                  transition: 'background-color 0.2s',
+                                }}
+                              />
+                            </div>
+                            <label
+                              className={`fs-8 fw-bold cursor-pointer mb-0 ${s.is_active ? 'text-success' : 'text-danger'
+                                }`}
+                            >
+                              {s.is_active ? 'Active' : 'Inactive'}
+                            </label>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className='text-gray-800'>{s.mobile_number}</div>
-                        <span className={`badge badge-light-${s.is_active ? 'success' : 'danger'} py-1 px-2 fs-8`}>{s.is_active ? 'Active' : 'Inactive'}</span>
-                      </td>
-                      <td className='text-center'><CheckIcon exists={!!hasProfile} /></td>
-                      <td className='text-center'><CheckIcon exists={!!hasParent} /></td>
-                      <td className='text-center'><CheckIcon exists={!!hasAddress} /></td>
-                      <td className='text-center text-muted'>
-                        {docsCount > 0 ? (
-                          <span className='badge badge-light-primary'>{docsCount} Doc{docsCount > 1 ? 's' : ''}</span>
-                        ) : <span className='text-gray-400'>0 Docs</span>}
-                      </td>
-                      <td className='text-center'>
-                        {hasEnrollment ? (
-                          <span className='badge badge-light-success'>Yes</span>
-                        ) : <span className='badge badge-light-warning'>Pending</span>}
-                      </td>
-                      <td className='text-end'>
-                        <button className='btn btn-sm btn-light-primary fw-bold' onClick={() => openManageModal(s)}>
-                          <i className='ki-duotone ki-setting-2 fs-4 me-1'><span className='path1'></span><span className='path2'></span></i> Manage
-                        </button>
-                      </td>
-                    </tr>
+                        </td>                      <td className='text-center'><CheckIcon exists={!!hasProfile} /></td>
+                        <td className='text-center'><CheckIcon exists={!!hasParent} /></td>
+                        <td className='text-center'><CheckIcon exists={!!hasAddress} /></td>
+                        <td className='text-center text-muted'>
+                          {docsCount > 0 ? (
+                            <div className='d-flex flex-column align-items-center gap-1'>
+                              <span className='badge badge-light-primary'>{docsCount} Doc{docsCount > 1 ? 's' : ''}</span>
+                              {verifiedCount > 0 && <span className='badge badge-light-success fs-9 px-1 py-1'>{verifiedCount} Verified</span>}
+                              {pendingCount > 0 && <span className='badge badge-light-warning fs-9 px-1 py-1'>{pendingCount} Pending</span>}
+                              {rejectedCount > 0 && <span className='badge badge-light-danger fs-9 px-1 py-1'>{rejectedCount} Rejected</span>}
+                            </div>
+                          ) : <span className='text-gray-400'>0 Docs</span>}
+                        </td>
+                        <td className='text-center'>
+                          {hasEnrollment ? (
+                            <span className='badge badge-light-success'>Yes</span>
+                          ) : <span className='badge badge-light-warning'>Pending</span>}
+                        </td>
+                        <td className='text-end'>
+                          <button className='btn btn-sm btn-light-primary fw-bold' onClick={() => openManageModal(s)}>
+                            <i className='ki-duotone ki-setting-2 fs-4 me-1'><span className='path1'></span><span className='path2'></span></i> Manage
+                          </button>
+                        </td>
+                      </tr>
                     )
                   })}
                 </tbody>
               </table>
             </div>
-            
+
             <div className='mt-3 text-muted fs-8 d-flex align-items-center'>
               <i className='ki-duotone ki-information-4 fs-3 me-2 text-primary'><span className='path1'></span><span className='path2'></span><span className='path3'></span></i>
               Note: If columns display 'Missing' even after filling details, your backend API `GET /students` may need to include relations (`profile`, `parent`, `address`, `documents`, `enrollments`).
@@ -432,7 +485,7 @@ const AdmissionPage: FC = () => {
             </div>
           </Modal.Title>
         </Modal.Header>
-        
+
         <div className='d-flex flex-row flex-column-fluid'>
           {/* Sidebar Menu inside modal */}
           <div className='w-250px w-lg-300px bg-light-dark px-6 py-8 border-end border-gray-200'>
@@ -504,32 +557,32 @@ const AdmissionPage: FC = () => {
             {/* TAB: Profile */}
             {activeTab === 'profile' && (
               <form onSubmit={handleSaveProfile}>
-                 <h4 className='fw-bold mb-5'>Personal Profile</h4>
-                 <div className='row g-5 mb-8'>
+                <h4 className='fw-bold mb-5'>Personal Profile</h4>
+                <div className='row g-5 mb-8'>
                   <div className='col-md-6'><label className='required fw-semibold fs-6 mb-2'>DOB</label><input type='date' className='form-control form-control-solid' value={profileForm.dob} onChange={e => setProfileForm(s => ({ ...s, dob: e.target.value }))} required /></div>
                   <div className='col-md-6'><label className='required fw-semibold fs-6 mb-2'>Gender</label><select className='form-select form-select-solid' value={profileForm.gender} onChange={e => setProfileForm(s => ({ ...s, gender: e.target.value }))}>{GENDERS.map(g => <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>)}</select></div>
                   <div className='col-md-4'><label className='required fw-semibold fs-6 mb-2'>Blood Group</label><select className='form-select form-select-solid' value={profileForm.blood_group} onChange={e => setProfileForm(s => ({ ...s, blood_group: e.target.value }))}>{BLOOD_GROUPS.map(b => <option key={b}>{b}</option>)}</select></div>
                   <div className='col-md-4'><label className='required fw-semibold fs-6 mb-2'>Nationality</label><input className='form-control form-control-solid' value={profileForm.nationality} onChange={e => setProfileForm(s => ({ ...s, nationality: e.target.value }))} required /></div>
                   <div className='col-md-4'><label className='required fw-semibold fs-6 mb-2'>Category</label><select className='form-select form-select-solid' value={profileForm.category} onChange={e => setProfileForm(s => ({ ...s, category: e.target.value }))}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></div>
-                 </div>
-                 <div className='text-end'><Button variant='primary' type='submit' disabled={manageSaving}>{manageSaving ? 'Saving...' : 'Save Profile'}</Button></div>
+                </div>
+                <div className='text-end'><Button variant='primary' type='submit' disabled={manageSaving}>{manageSaving ? 'Saving...' : 'Save Profile'}</Button></div>
               </form>
             )}
 
             {/* TAB: Parent */}
             {activeTab === 'parent' && (
               <form onSubmit={handleSaveParent}>
-                 <h4 className='fw-bold mb-5'>Parent Details</h4>
-                 <div className='row g-5 mb-8'>
+                <h4 className='fw-bold mb-5'>Parent Details</h4>
+                <div className='row g-5 mb-8'>
                   <div className='col-md-4'><label className='required fw-semibold fs-6 mb-2'>Father Name</label><input className='form-control form-control-solid' value={parentForm.father_name} onChange={e => setParentForm(s => ({ ...s, father_name: e.target.value }))} required /></div>
                   <div className='col-md-4'><label className='required fw-semibold fs-6 mb-2'>Father Phone</label><input className='form-control form-control-solid' value={parentForm.father_phone} onChange={e => setParentForm(s => ({ ...s, father_phone: e.target.value }))} required /></div>
                   <div className='col-md-4'><label className='fw-semibold fs-6 mb-2'>Father Occupation</label><input className='form-control form-control-solid' value={parentForm.father_occupation} onChange={e => setParentForm(s => ({ ...s, father_occupation: e.target.value }))} /></div>
-                  <div className='col-12'><hr className='text-muted my-2'/></div>
+                  <div className='col-12'><hr className='text-muted my-2' /></div>
                   <div className='col-md-4'><label className='required fw-semibold fs-6 mb-2'>Mother Name</label><input className='form-control form-control-solid' value={parentForm.mother_name} onChange={e => setParentForm(s => ({ ...s, mother_name: e.target.value }))} required /></div>
                   <div className='col-md-4'><label className='fw-semibold fs-6 mb-2'>Mother Phone</label><input className='form-control form-control-solid' value={parentForm.mother_phone} onChange={e => setParentForm(s => ({ ...s, mother_phone: e.target.value }))} /></div>
                   <div className='col-md-4'><label className='fw-semibold fs-6 mb-2'>Mother Occupation</label><input className='form-control form-control-solid' value={parentForm.mother_occupation} onChange={e => setParentForm(s => ({ ...s, mother_occupation: e.target.value }))} /></div>
-                 </div>
-                 <div className='text-end'><Button variant='primary' type='submit' disabled={manageSaving}>{manageSaving ? 'Saving...' : 'Save Parent Details'}</Button></div>
+                </div>
+                <div className='text-end'><Button variant='primary' type='submit' disabled={manageSaving}>{manageSaving ? 'Saving...' : 'Save Parent Details'}</Button></div>
               </form>
             )}
 
@@ -538,22 +591,22 @@ const AdmissionPage: FC = () => {
               <form onSubmit={handleSaveAddress}>
                 <h4 className='fw-bold mb-5'>Address Details</h4>
                 <div className='row g-4 mb-8'>
-                  <div className='col-md-8'><label className='fw-semibold fs-6 mb-2'>Current Street/Area</label><input className='form-control form-control-solid' value={addrForm.current_address} onChange={e => setAddrForm(s => ({...s, current_address: e.target.value}))} required/></div>
-                  <div className='col-md-4'><label className='fw-semibold fs-6 mb-2'>Pincode</label><input className='form-control form-control-solid' value={addrForm.current_pincode} onChange={e => setAddrForm(s => ({...s, current_pincode: e.target.value}))} required/></div>
-                  <div className='col-md-6'><label className='fw-semibold fs-6 mb-2'>City</label><input className='form-control form-control-solid' value={addrForm.current_city} onChange={e => setAddrForm(s => ({...s, current_city: e.target.value}))} required/></div>
-                  <div className='col-md-6'><label className='fw-semibold fs-6 mb-2'>State</label><input className='form-control form-control-solid' value={addrForm.current_state} onChange={e => setAddrForm(s => ({...s, current_state: e.target.value}))} required/></div>
+                  <div className='col-md-8'><label className='fw-semibold fs-6 mb-2'>Current Street/Area</label><input className='form-control form-control-solid' value={addrForm.current_address} onChange={e => setAddrForm(s => ({ ...s, current_address: e.target.value }))} required /></div>
+                  <div className='col-md-4'><label className='fw-semibold fs-6 mb-2'>Pincode</label><input className='form-control form-control-solid' value={addrForm.current_pincode} onChange={e => setAddrForm(s => ({ ...s, current_pincode: e.target.value }))} required /></div>
+                  <div className='col-md-6'><label className='fw-semibold fs-6 mb-2'>City</label><input className='form-control form-control-solid' value={addrForm.current_city} onChange={e => setAddrForm(s => ({ ...s, current_city: e.target.value }))} required /></div>
+                  <div className='col-md-6'><label className='fw-semibold fs-6 mb-2'>State</label><input className='form-control form-control-solid' value={addrForm.current_state} onChange={e => setAddrForm(s => ({ ...s, current_state: e.target.value }))} required /></div>
                   <div className='col-12'>
                     <div className='form-check form-switch form-check-custom mt-2'>
-                      <input className='form-check-input' type='checkbox' checked={addrForm.is_same_as_current} onChange={e => setAddrForm(s => ({...s, is_same_as_current: e.target.checked}))} />
+                      <input className='form-check-input' type='checkbox' checked={addrForm.is_same_as_current} onChange={e => setAddrForm(s => ({ ...s, is_same_as_current: e.target.checked }))} />
                       <label className='form-check-label ms-3'>Permanent address same as current address</label>
                     </div>
                   </div>
                   {!addrForm.is_same_as_current && (
                     <div className='row g-4 mt-1 p-0 m-0 w-100 border rounded bg-light'>
-                      <div className='col-md-8'><label className='fw-semibold fs-6 mb-2'>Permanent Street/Area</label><input className='form-control form-control-solid' value={addrForm.permanent_address} onChange={e => setAddrForm(s => ({...s, permanent_address: e.target.value}))} required/></div>
-                      <div className='col-md-4'><label className='fw-semibold fs-6 mb-2'>Pincode</label><input className='form-control form-control-solid' value={addrForm.permanent_pincode} onChange={e => setAddrForm(s => ({...s, permanent_pincode: e.target.value}))} required/></div>
-                      <div className='col-md-6'><label className='fw-semibold fs-6 mb-2'>City</label><input className='form-control form-control-solid' value={addrForm.permanent_city} onChange={e => setAddrForm(s => ({...s, permanent_city: e.target.value}))} required/></div>
-                      <div className='col-md-6 mb-4'><label className='fw-semibold fs-6 mb-2'>State</label><input className='form-control form-control-solid' value={addrForm.permanent_state} onChange={e => setAddrForm(s => ({...s, permanent_state: e.target.value}))} required/></div>
+                      <div className='col-md-8'><label className='fw-semibold fs-6 mb-2'>Permanent Street/Area</label><input className='form-control form-control-solid' value={addrForm.permanent_address} onChange={e => setAddrForm(s => ({ ...s, permanent_address: e.target.value }))} required /></div>
+                      <div className='col-md-4'><label className='fw-semibold fs-6 mb-2'>Pincode</label><input className='form-control form-control-solid' value={addrForm.permanent_pincode} onChange={e => setAddrForm(s => ({ ...s, permanent_pincode: e.target.value }))} required /></div>
+                      <div className='col-md-6'><label className='fw-semibold fs-6 mb-2'>City</label><input className='form-control form-control-solid' value={addrForm.permanent_city} onChange={e => setAddrForm(s => ({ ...s, permanent_city: e.target.value }))} required /></div>
+                      <div className='col-md-6 mb-4'><label className='fw-semibold fs-6 mb-2'>State</label><input className='form-control form-control-solid' value={addrForm.permanent_state} onChange={e => setAddrForm(s => ({ ...s, permanent_state: e.target.value }))} required /></div>
                     </div>
                   )}
                 </div>

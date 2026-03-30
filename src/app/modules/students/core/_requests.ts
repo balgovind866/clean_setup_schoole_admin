@@ -173,3 +173,11 @@ export function updateEnrollmentStatus(
     { status }
   )
 }
+
+/** Admin: Toggle active/inactive status */
+export function toggleStudentStatus(schoolId: string | number, studentId: string | number) {
+  return axios.patch<any>(
+    `${API_URL}/school/${schoolId}/students/${studentId}/toggle-status`,
+    {}
+  )
+}
