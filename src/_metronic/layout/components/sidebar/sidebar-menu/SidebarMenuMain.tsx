@@ -54,11 +54,11 @@ const SidebarMenuMain = () => {
         <>
           {hasPermission('students') && (
             <SidebarMenuItemWithSub to='/students' title='Students' icon='user' fontIcon='bi-people'>
-              <SidebarMenuItem to='/students/admission' title='Admission' hasBullet={true} />
-              <SidebarMenuItem to='/students/enrollment' title='Enrollment' hasBullet={true} />
+              <SidebarMenuItem to='/students/admission' title='All Students' hasBullet={true} />
+              <SidebarMenuItem to='/students/enrollment' title='Enrollment Roster' hasBullet={true} />
+              <SidebarMenuItem to='/students/documents' title='Document Verification' hasBullet={true} />
               <SidebarMenuItem to='/students/attendance' title='Attendance' hasBullet={true} />
               <SidebarMenuItem to='/students/performance' title='Performance' hasBullet={true} />
-              <SidebarMenuItem to='/students/documents' title='Documents' hasBullet={true} />
             </SidebarMenuItemWithSub>
           )}
 
