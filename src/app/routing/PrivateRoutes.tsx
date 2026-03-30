@@ -81,12 +81,14 @@ const PrivateRoutes = () => {
         {/* Academic */}
         <Route path='academic/sessions' element={<SuspensedView><RouteConfig.academicRoutes.sessions /></SuspensedView>} />
         <Route path='academic/classes' element={<SuspensedView><RouteConfig.academicRoutes.classes /></SuspensedView>} />
+        <Route path='academic/sections' element={<SuspensedView><RouteConfig.academicRoutes.sections /></SuspensedView>} />
         <Route path='academic/subjects' element={<SuspensedView><RouteConfig.academicRoutes.subjects /></SuspensedView>} />
         <Route path='academic/mapping' element={<SuspensedView><RouteConfig.academicRoutes.mapping /></SuspensedView>} />
         <Route path='academic/calendar' element={<SuspensedView><RouteConfig.academicRoutes.calendar /></SuspensedView>} />
         <Route path='academic/syllabus' element={<SuspensedView><RouteConfig.academicRoutes.syllabus /></SuspensedView>} />
         <Route path='academic/lessons' element={<SuspensedView><RouteConfig.academicRoutes.lessons /></SuspensedView>} />
         <Route path='academic/exam-schedule' element={<SuspensedView><RouteConfig.academicRoutes.examSchedule /></SuspensedView>} />
+
 
         {/* Fees */}
         <Route path='fees/structure' element={<SuspensedView><RouteConfig.feeRoutes.structure /></SuspensedView>} />

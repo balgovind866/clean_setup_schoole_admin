@@ -9,6 +9,8 @@ const lazyLoad = (importFn: () => Promise<any>, wrapperName: string) =>
 export const academicRoutes = {
     sessions: lazy(() => import('../modules/academic/sessions/AcademicSessionsPage')),
     classes: lazyLoad(() => import('../modules/academic/ClassesPage'), 'ClassesWrapper'),
+    // sections shares the same page as classes (tabbed UI handles both)
+    sections: lazyLoad(() => import('../modules/academic/ClassesPage'), 'ClassesWrapper'),
     subjects: lazyLoad(() => import('../modules/academic/SubjectsPage'), 'SubjectsWrapper'),
     mapping: lazyLoad(() => import('../modules/academic/MappingPage'), 'MappingWrapper'),
     calendar: lazyLoad(() => import('../modules/academic/CalendarPage'), 'CalendarWrapper'),

@@ -1,5 +1,11 @@
 import axios from 'axios'
-import { SessionCreationData, SessionResponse, SessionsListResponse } from './_models'
+import {
+  SessionCreationData, SessionResponse, SessionsListResponse,
+  ClassCreationData, ClassResponse, ClassesListResponse,
+  SectionCreationData, SectionResponse, SectionsListResponse,
+  ClassSectionMappingCreationData, ClassSectionMappingResponse, ClassSectionMappingsListResponse,
+} from './_models'
+
 
 const API_URL = import.meta.env.VITE_APP_API_URL
 
@@ -31,4 +37,78 @@ export function deleteAcademicSession(schoolId: string | number, id: string | nu
 
 export function setCurrentAcademicSession(schoolId: string | number, id: string | number) {
   return axios.patch<SessionResponse>(SET_CURRENT_SESSION_URL(schoolId, id))
+}
+
+// ─── Classes API ─────────────────────────────────────────────────────────
+const CLASSES_URL = (schoolId: string | number) => `${API_URL}/school/${schoolId}/classes`
+const CLASS_URL = (schoolId: string | number, id: string | number) => `${API_URL}/school/${schoolId}/classes/${id}`
+
+export function getClasses(schoolId: string | number, page: number = 1, limit: number = 100) {
+  return axios.get<ClassesListResponse>(CLASSES_URL(schoolId), { params: { page, limit } })
+}
+
+export function getClassById(schoolId: string | number, id: string | number) {
+  return axios.get<ClassResponse>(CLASS_URL(schoolId, id))
+}
+
+export function createClass(schoolId: string | number, payload: ClassCreationData) {
+  return axios.post<ClassResponse>(CLASSES_URL(schoolId), payload)
+}
+
+export function updateClass(schoolId: string | number, id: string | number, payload: Partial<ClassCreationData>) {
+  return axios.put<ClassResponse>(CLASS_URL(schoolId, id), payload)
+}
+
+export function deleteClass(schoolId: string | number, id: string | number) {
+  return axios.delete(CLASS_URL(schoolId, id))
+}
+
+// ─── Sections API ────────────────────────────────────────────────────────
+const SECTIONS_URL = (schoolId: string | number) => `${API_URL}/school/${schoolId}/sections`
+const SECTION_URL = (schoolId: string | number, id: string | number) => `${API_URL}/school/${schoolId}/sections/${id}`
+
+export function getSections(schoolId: string | number, page: number = 1, limit: number = 100) {
+  return axios.get<SectionsListResponse>(SECTIONS_URL(schoolId), { params: { page, limit } })
+}
+
+export function getSectionById(schoolId: string | number, id: string | number) {
+  return axios.get<SectionResponse>(SECTION_URL(schoolId, id))
+}
+
+export function createSection(schoolId: string | number, payload: SectionCreationData) {
+  return axios.post<SectionResponse>(SECTIONS_URL(schoolId), payload)
+}
+
+export function updateSection(schoolId: string | number, id: string | number, payload: Partial<SectionCreationData>) {
+  return axios.put<SectionResponse>(SECTION_URL(schoolId, id), payload)
+}
+
+export function deleteSection(schoolId: string | number, id: string | number) {
+  return axios.delete(SECTION_URL(schoolId, id))
+}
+
+// ─── Class-Section Mapping API ──────────────────────────────────────────────
+const CLASS_SECTIONS_URL = (schoolId: string | number, classId: string | number) =>
+  `${API_URL}/school/${schoolId}/classes/${classId}/sections`
+const CLASS_SECTION_URL = (schoolId: string | number, classId: string | number, sectionId: string | number) =>
+  `${API_URL}/school/${schoolId}/classes/${classId}/sections/${sectionId}`
+
+export function getClassSections(schoolId: string | number, classId: string | number) {
+  return axios.get<ClassSectionMappingsListResponse>(CLASS_SECTIONS_URL(schoolId, classId))
+}
+
+export function assignSectionToClass(
+  schoolId: string | number,
+  classId: string | number,
+  payload: ClassSectionMappingCreationData
+) {
+  return axios.post<ClassSectionMappingResponse>(CLASS_SECTIONS_URL(schoolId, classId), payload)
+}
+
+export function removeSectionFromClass(
+  schoolId: string | number,
+  classId: string | number,
+  sectionId: string | number
+) {
+  return axios.delete(CLASS_SECTION_URL(schoolId, classId, sectionId))
 }

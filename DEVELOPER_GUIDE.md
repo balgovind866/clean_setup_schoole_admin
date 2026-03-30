@@ -432,7 +432,201 @@ const MyTable: FC = () => {
 
 ---
 
-**Last Updated**: January 25, 2026
-**Total Pages**: 92
+**Last Updated**: March 30, 2026
+**Total Pages**: 92+
 **Total Modules**: 13
-**Status**: Structure Complete, Ready for Development
+**Status**: Classes & Sections API — Fully Integrated ✅
+
+---
+
+## 📡 API Reference
+
+> Base URL: `http://localhost:3000/api`  
+> All requests require: `Authorization: Bearer {token}` and `Content-Type: application/json`  
+> Replace `{schoolId}` with your actual School ID from `currentUser.schoolId`
+
+---
+
+### 1. 📚 Classes API
+
+#### ➕ Create a Class
+```bash
+curl -X POST http://localhost:3000/api/school/{schoolId}/classes \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Grade 10", "numeric_value": 10 }'
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Class created successfully",
+  "data": {
+    "class": { "id": 2, "name": "Grade 10", "numeric_value": 10, "createdAt": "...", "updatedAt": "..." }
+  }
+}
+```
+
+#### 📋 Get All Classes (Paginated)
+```bash
+curl -X GET "http://localhost:3000/api/school/{schoolId}/classes?page=1&limit=10" \
+  -H "Authorization: Bearer {token}"
+```
+**Response:**
+```json
+{
+  "success": true,
+  "data": { "classes": [{ "id": 1, "name": "Grade 10", "numeric_value": 10, "createdAt": "...", "updatedAt": "..." }] },
+  "pagination": { "total": 1, "page": 1, "limit": 10, "totalPages": 1, "hasNextPage": false, "hasPrevPage": false }
+}
+```
+
+#### 🔍 Get Class by ID
+```bash
+curl -X GET http://localhost:3000/api/school/{schoolId}/classes/{classId} \
+  -H "Authorization: Bearer {token}"
+```
+
+#### ✏️ Update a Class
+```bash
+curl -X PUT http://localhost:3000/api/school/{schoolId}/classes/{classId} \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Grade X" }'
+```
+
+#### 🗑️ Delete a Class
+```bash
+curl -X DELETE http://localhost:3000/api/school/{schoolId}/classes/{classId} \
+  -H "Authorization: Bearer {token}"
+```
+
+---
+
+### 2. 🏷️ Sections API
+
+#### ➕ Create a Section
+```bash
+curl -X POST http://localhost:3000/api/school/{schoolId}/sections \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "A" }'
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Section created successfully",
+  "data": {
+    "section": { "id": 2, "name": "A", "createdAt": "...", "updatedAt": "..." }
+  }
+}
+```
+
+#### 📋 Get All Sections (Paginated)
+```bash
+curl -X GET "http://localhost:3000/api/school/{schoolId}/sections?page=1&limit=10" \
+  -H "Authorization: Bearer {token}"
+```
+**Response:**
+```json
+{
+  "success": true,
+  "data": { "sections": [{ "id": 1, "name": "A", "createdAt": "...", "updatedAt": "..." }] },
+  "pagination": { "total": 1, "page": 1, "limit": 10, "totalPages": 1, "hasNextPage": false, "hasPrevPage": false }
+}
+```
+
+#### 🔍 Get Section by ID
+```bash
+curl -X GET http://localhost:3000/api/school/{schoolId}/sections/{sectionId} \
+  -H "Authorization: Bearer {token}"
+```
+
+#### ✏️ Update a Section
+```bash
+curl -X PUT http://localhost:3000/api/school/{schoolId}/sections/{sectionId} \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "A+" }'
+```
+
+#### 🗑️ Delete a Section
+```bash
+curl -X DELETE http://localhost:3000/api/school/{schoolId}/sections/{sectionId} \
+  -H "Authorization: Bearer {token}"
+```
+
+---
+
+### 3. 🔗 Class-Section Mapping API
+
+#### ➕ Assign a Section to a Class
+```bash
+curl -X POST http://localhost:3000/api/school/{schoolId}/classes/{classId}/sections \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{ "section_id": 1, "capacity": 45 }'
+```
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Section assigned to class successfully",
+  "data": {
+    "mapping": { "id": 1, "class_id": 2, "section_id": 2, "capacity": 45, "createdAt": "...", "updatedAt": "..." }
+  }
+}
+```
+
+#### 📋 Get All Sections for a Class
+```bash
+curl -X GET http://localhost:3000/api/school/{schoolId}/classes/{classId}/sections \
+  -H "Authorization: Bearer {token}"
+```
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "sections": [{
+      "id": 1, "class_id": 2, "section_id": 2, "capacity": 45,
+      "section": { "id": 2, "name": "A", "createdAt": "...", "updatedAt": "..." }
+    }]
+  }
+}
+```
+
+#### 🗑️ Remove a Section from a Class
+```bash
+curl -X DELETE http://localhost:3000/api/school/{schoolId}/classes/{classId}/sections/{sectionId} \
+  -H "Authorization: Bearer {token}"
+```
+
+---
+
+### Frontend API Functions Location
+
+All API functions are defined in:
+```
+src/app/modules/academic/core/
+├── _models.ts     ← TypeScript interfaces for all API types
+└── _requests.ts   ← Axios functions for all API calls
+```
+
+**Function Reference:**
+
+| Function | Purpose |
+|---|---|
+| `getClasses(schoolId)` | Fetch all classes |
+| `createClass(schoolId, {name, numeric_value})` | Create a class |
+| `updateClass(schoolId, id, data)` | Update a class |
+| `deleteClass(schoolId, id)` | Delete a class |
+| `getSections(schoolId)` | Fetch all sections |
+| `createSection(schoolId, {name})` | Create a section |
+| `updateSection(schoolId, id, data)` | Update a section |
+| `deleteSection(schoolId, id)` | Delete a section |
+| `getClassSections(schoolId, classId)` | Get sections assigned to a class |
+| `assignSectionToClass(schoolId, classId, {section_id, capacity})` | Assign section to class |
+| `removeSectionFromClass(schoolId, classId, sectionId)` | Remove section from class |
+
