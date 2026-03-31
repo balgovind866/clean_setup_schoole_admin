@@ -246,28 +246,22 @@ const AdmissionPage: FC = () => {
 
   return (
     <>
-      <ToolbarWrapper />
+
       <Content>
         {/* ── Stats Cards ── */}
-        <div className='row g-5 mb-7'>
+        <div className='d-flex gap-3 flex-wrap mb-7'>
           {[
-            { label: 'Total Students', value: stats.total, icon: 'ki-duotone ki-people', color: 'primary' },
-            { label: 'Active', value: stats.active, icon: 'ki-duotone ki-verify', color: 'success' },
-            { label: 'Enrolled', value: stats.enrolled, icon: 'ki-duotone ki-book-open', color: 'info' },
-          ].map(({ label, value, icon, color }) => (
-            <div className='col-sm-6 col-xl-4' key={label}>
-              <div className={`card card-flush bg-light-${color} border-0 h-100`}>
-                <div className='card-body d-flex align-items-center py-5'>
-                  <div className={`symbol symbol-50px me-4 bg-${color} bg-opacity-15 rounded-circle`}>
-                    <div className='symbol-label d-flex align-items-center justify-content-center'>
-                      <i className={`${icon} fs-2x text-${color}`}><span className='path1'></span><span className='path2'></span><span className='path3'></span></i>
-                    </div>
-                  </div>
-                  <div>
-                    <div className={`fs-2 fw-bolder text-${color}`}>{loading ? '—' : value}</div>
-                    <div className='text-gray-600 fw-semibold fs-7'>{label}</div>
-                  </div>
-                </div>
+            { label: 'Total Students', value: stats.total, color: 'primary', bg: 'bg-light-primary', },
+            { label: 'Active', value: stats.active, color: 'success', bg: 'bg-light-success', },
+            { label: 'Enrolled', value: stats.enrolled, color: 'info', bg: 'bg-light-info', },
+          ].map(({ label, value, color, bg }) => (
+            <div key={label} className={`d-flex align-items-center gap-3 ${bg} rounded-3 px-4 py-3`} style={{ minWidth: 140 }}>
+              <div className={`symbol symbol-35px rounded-circle bg-${color} bg-opacity-15 d-flex align-items-center justify-content-center`}>
+                <i className={` fs-3 text-${color}`}><span className='path1' /><span className='path2' /></i>
+              </div>
+              <div>
+                <div className={`fs-4 fw-bold text-${color} lh-1`}>{loading ? '—' : value}</div>
+                <div className='text-gray-500 fw-semibold fs-8 mt-1'>{label}</div>
               </div>
             </div>
           ))}
