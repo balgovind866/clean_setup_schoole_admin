@@ -117,9 +117,15 @@ const StaffAttendancePage: FC = () => {
         }))
     }
 
+    const getStaffName = (staff: StaffAttendanceRecord) => {
+        if (staff.name && staff.name !== 'undefined') return staff.name;
+        if (staff.first_name) return `${staff.first_name} ${staff.last_name || ''}`.trim();
+        return `Staff #${staff.staff_id}`;
+    }
+
     const filteredAttendances = attendances.filter(a => {
         if (!search) return true
-        const name = (a.name || '').toLowerCase()
+        const name = getStaffName(a).toLowerCase()
         const designation = (a.designation || '').toLowerCase()
         return name.includes(search.toLowerCase()) || designation.includes(search.toLowerCase())
     })
@@ -198,6 +204,7 @@ const StaffAttendancePage: FC = () => {
                                         </tr>
                                     ) : filteredAttendances.map((staff, idx) => {
                                         const key = `${staff.staff_type}_${staff.staff_id}`
+                                        const displayName = getStaffName(staff);
                                         return (
                                             <tr key={key}>
                                                 <td>{idx + 1}</td>
@@ -205,12 +212,12 @@ const StaffAttendancePage: FC = () => {
                                                     <div className='d-flex align-items-center'>
                                                         <div className='symbol symbol-circle symbol-35px overflow-hidden me-3'>
                                                             <div className='symbol-label fs-3 bg-light-info text-info'>
-                                                                {(staff.name && staff.name !== 'undefined') ? staff.name.charAt(0).toUpperCase() : '?'}
+                                                                {displayName.charAt(0).toUpperCase()}
                                                             </div>
                                                         </div>
                                                         <div className='d-flex flex-column'>
                                                             <span className='text-gray-800 fw-bold mb-1'>
-                                                                {staff.name !== 'undefined' ? staff.name : `Staff #${staff.staff_id}`}
+                                                                {displayName}
                                                             </span>
                                                             <span className='text-muted fs-7'>{staff.designation}</span>
                                                         </div>

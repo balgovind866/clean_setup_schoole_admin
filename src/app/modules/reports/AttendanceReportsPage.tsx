@@ -309,7 +309,7 @@ const AttendanceReports: FC = () => {
                                                                     </span>
                                                                 </td>
                                                                 <td>{record.entry_time || '-'}</td>
-                                                                <td><span className='text-muted'>{record.attendance_mode.replace('_', ' ')}</span></td>
+                                                                <td><span className='text-muted'>{record.attendance_mode ? record.attendance_mode.replace(/_/g, ' ') : 'MANUAL'}</span></td>
                                                             </tr>
                                                         ))}
                                                     </tbody>

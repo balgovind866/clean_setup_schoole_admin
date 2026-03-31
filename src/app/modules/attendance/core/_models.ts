@@ -34,7 +34,9 @@ export interface MarkStudentAttendancePayload {
 export interface StaffAttendanceRecord {
     staff_id: number;
     staff_type: 'TEACHER' | 'ADMIN';
-    name: string;
+    name?: string;
+    first_name?: string;
+    last_name?: string;
     designation: string;
     attendance_id: number | null;
     status: 'PRESENT' | 'ABSENT' | 'LATE' | 'HALF_DAY' | 'LEAVE' | null;
