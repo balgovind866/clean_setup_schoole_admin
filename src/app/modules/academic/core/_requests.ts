@@ -4,6 +4,10 @@ import {
   ClassCreationData, ClassResponse, ClassesListResponse,
   SectionCreationData, SectionResponse, SectionsListResponse,
   ClassSectionMappingCreationData, ClassSectionMappingResponse, ClassSectionMappingsListResponse,
+  SubjectCreationData, SubjectResponse, SubjectsListResponse,
+  ClassSubjectMappingCreationData, ClassSubjectMappingResponse,
+  ClassSubjectMappingsListResponse, AssignClassTeacherPayload,
+  ClassTeacherMappingResponse,
 } from './_models'
 
 
@@ -112,3 +116,73 @@ export function removeSectionFromClass(
 ) {
   return axios.delete(CLASS_SECTION_URL(schoolId, classId, sectionId))
 }
+
+
+const SUBJECTS_URL = (schoolId: string | number) => `${API_URL}/school/${schoolId}/subjects`
+const SUBJECT_URL = (schoolId: string | number, id: string | number) =>
+  `${API_URL}/school/${schoolId}/subjects/${id}`
+
+export function getSubjects(schoolId: string | number) {
+  return axios.get<SubjectsListResponse>(SUBJECTS_URL(schoolId))
+}
+
+export function createSubject(schoolId: string | number, payload: SubjectCreationData) {
+  return axios.post<SubjectResponse>(SUBJECTS_URL(schoolId), payload)
+}
+
+export function updateSubject(
+  schoolId: string | number,
+  id: string | number,
+  payload: Partial<SubjectCreationData>
+) {
+  return axios.put<SubjectResponse>(SUBJECT_URL(schoolId, id), payload)
+}
+
+export function deleteSubject(schoolId: string | number, id: string | number) {
+  return axios.delete(SUBJECT_URL(schoolId, id))
+}
+
+// ─── Class-Subject Mapping API ────────────────────────────────────────────────
+
+const CLASS_SUBJECTS_URL = (schoolId: string | number, classId: string | number) =>
+  `${API_URL}/school/${schoolId}/classes/${classId}/subjects`
+
+const CLASS_SUBJECT_ITEM_URL = (
+  schoolId: string | number,
+  classId: string | number,
+  subjectId: string | number
+) => `${API_URL}/school/${schoolId}/classes/${classId}/subjects/${subjectId}`
+
+export function getClassSubjects(schoolId: string | number, classId: string | number) {
+  return axios.get<ClassSubjectMappingsListResponse>(CLASS_SUBJECTS_URL(schoolId, classId))
+}
+
+export function assignSubjectToClass(
+  schoolId: string | number,
+  classId: string | number,
+  payload: ClassSubjectMappingCreationData
+) {
+  return axios.post<ClassSubjectMappingResponse>(CLASS_SUBJECTS_URL(schoolId, classId), payload)
+}
+
+export function removeSubjectFromClass(
+  schoolId: string | number,
+  classId: string | number,
+  subjectId: string | number
+) {
+  return axios.delete(CLASS_SUBJECT_ITEM_URL(schoolId, classId, subjectId))
+}
+
+// ─── Class Teacher Assignment API ─────────────────────────────────────────────
+
+export function assignClassTeacher(
+  schoolId: string | number,
+  classId: string | number,
+  payload: AssignClassTeacherPayload
+) {
+  return axios.patch<ClassTeacherMappingResponse>(
+    `${API_URL}/school/${schoolId}/classes/${classId}/class-teacher`,
+    payload
+  )
+}
+
