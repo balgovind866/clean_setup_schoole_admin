@@ -504,107 +504,168 @@ const SubjectsPage: FC = () => {
           {ctError && <div className='alert alert-danger mb-5'>{ctError}</div>}
           {ctSuccess && <div className='alert alert-success mb-5'>{ctSuccess}</div>}
 
-          <div className='card card-flush'>
-            <div className='card-header'>
-              <div>
-                <h3 className='fw-bold mb-0'>Assign Class Teacher</h3>
-                <p className='text-muted fs-7 mb-0 mt-1'>Map a teacher to a specific class section as the class teacher</p>
-              </div>
-            </div>
-            <div className='card-body mw-600px'>
-              <div className='row g-5'>
-                {/* Class selector */}
-                <div className='col-12'>
-                  <label className='required fw-bold fs-6 mb-2'>Select Class</label>
-                  <div className='row g-3'>
-                    {ctClasses.map((cls: any) => (
-                      <div className='col-md-3 col-6' key={cls.id}>
-                        <div
-                          onClick={() => { setCtClassId(cls.id); setCtSectionId(null) }}
-                          className={`card card-bordered text-center p-4 cursor-pointer ${ctClassId === cls.id ? 'border-primary bg-light-primary' : 'bg-hover-light'}`}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <div className={`fw-bolder fs-3 ${ctClassId === cls.id ? 'text-primary' : 'text-gray-700'}`}>
-                            {cls.numeric_name || cls.name}
+          <div className='row g-6'>
+            {/* Left: Class selector */}
+            <div className='col-md-4'>
+              <div className='card card-flush h-100'>
+                <div className='card-header'>
+                  <h4 className='fw-bold'>Select Class</h4>
+                </div>
+                <div className='card-body px-3 py-4'>
+                  {ctClasses.length === 0
+                    ? <div className='text-muted text-center py-6'>No classes found</div>
+                    : ctClasses.map((cls: any) => (
+                      <div
+                        key={cls.id}
+                        onClick={() => { setCtClassId(cls.id); setCtSectionId(null); setCtTeacherId(null) }}
+                        className={`d-flex align-items-center p-4 rounded-2 mb-2 cursor-pointer border ${ctClassId === cls.id ? 'border-primary bg-light-primary' : 'border-gray-200 bg-hover-light'}`}
+                        style={{ cursor: 'pointer', transition: 'all 0.15s' }}
+                      >
+                        <div className={`symbol symbol-35px me-3`}>
+                          <div className={`symbol-label fw-bold ${ctClassId === cls.id ? 'bg-primary text-white' : 'bg-light-primary text-primary'}`}>
+                            {(cls.name || cls.class_name || 'C').charAt(0)}
                           </div>
-                          <div className='text-muted fs-8'>{cls.name}</div>
                         </div>
+                        <div>
+                          <div className='fw-bold text-gray-800 fs-5'>{cls.name || cls.class_name}</div>
+                        </div>
+                        {ctClassId === cls.id && (
+                          <i className='ki-duotone ki-check-circle fs-3 text-primary ms-auto'>
+                            <span className='path1'></span><span className='path2'></span>
+                          </i>
+                        )}
                       </div>
                     ))}
-                  </div>
                 </div>
+              </div>
+            </div>
 
-                {/* Section selector */}
-                {ctClassId && (
-                  <div className='col-12'>
-                    <label className='required fw-bold fs-6 mb-2'>Select Section</label>
-                    {ctSections.length === 0
-                      ? <div className='text-muted fs-7'>No sections found for this class</div>
-                      : (
-                        <div className='d-flex gap-3 flex-wrap'>
-                          {ctSections.map((sec: any) => {
-                            const secName = sec.section?.name || sec.name || `Section ${sec.section_id || sec.id}`
+            {/* Right: Sections and Teachers Table */}
+            <div className='col-md-8'>
+              <div className='card card-flush h-100'>
+                <div className='card-header align-items-center py-4 gap-2'>
+                  <h4 className='fw-bold mb-0'>
+                    {ctClassId
+                      ? `Sections for ${ctClasses.find(c => c.id === ctClassId)?.name || 'Class'}`
+                      : 'Select a class to assign teachers'}
+                  </h4>
+                  {ctClassId && (
+                    <span className='badge badge-light-primary'>{ctSections.length} Sections</span>
+                  )}
+                </div>
+                <div className='card-body pt-0'>
+                  {!ctClassId ? (
+                    <div className='text-center text-muted py-12'>
+                      <i className='ki-duotone ki-teacher fs-4x text-gray-300 mb-4'><span className='path1'></span><span className='path2'></span></i>
+                      <div className='fs-5'>Click on a class from the left menu to view and manage its class teachers.</div>
+                    </div>
+                  ) : (
+                    <div className='table-responsive mt-3'>
+                      <table className='table table-row-dashed fs-6 gy-4 align-middle'>
+                        <thead>
+                          <tr className='text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0 border-bottom-2'>
+                            <th className='w-125px'>Section</th>
+                            <th className='min-w-200px'>Current Class Teacher</th>
+                            <th className='text-end min-w-150px'>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className='fw-semibold text-gray-600'>
+                          {ctSections.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} className='text-center py-8 text-muted'>
+                                No sections found for this class.
+                              </td>
+                            </tr>
+                          ) : ctSections.map((sec: any) => {
                             const secId = sec.section_id || sec.id
+                            const secName = sec.section?.name || sec.name || `Sec ${secId}`
+                            const assignedTeacherId = sec.class_teacher_id
+                            const assignedTeacher = teachers.find(t => t.id === assignedTeacherId)
+
+                            const isEditing = ctSectionId === secId
+
                             return (
-                              <div
-                                key={secId}
-                                onClick={() => setCtSectionId(secId)}
-                                className={`badge fs-6 py-3 px-5 cursor-pointer ${ctSectionId === secId ? 'badge-primary' : 'badge-light-primary'}`}
-                                style={{ cursor: 'pointer' }}
-                              >
-                                {secName}
-                              </div>
+                              <tr key={secId} className={isEditing ? 'bg-light-primary rounded' : ''}>
+                                <td>
+                                  <span className='badge badge-lg badge-light fw-bold fs-6'>Section {secName}</span>
+                                </td>
+                                <td>
+                                  {isEditing ? (
+                                    <select
+                                      className='form-select form-select-sm form-select-solid border-primary'
+                                      value={ctTeacherId || ''}
+                                      onChange={e => setCtTeacherId(Number(e.target.value))}
+                                    >
+                                      <option value=''>— Remove / Clear —</option>
+                                      {teachers.filter(t => t.is_active).map(t => (
+                                        <option key={t.id} value={t.id}>
+                                          {t.name} {t.profession?.name ? `(${t.profession.name})` : ''}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : assignedTeacher ? (
+                                    <div className='d-flex align-items-center'>
+                                      <div className='symbol symbol-30px symbol-circle me-3'>
+                                        <span className='symbol-label bg-light-success text-success fw-bold'>
+                                          {assignedTeacher.name.charAt(0)}
+                                        </span>
+                                      </div>
+                                      <div className='d-flex flex-column'>
+                                        <span className='fw-bold text-gray-800'>{assignedTeacher.name}</span>
+                                        <span className='text-muted fs-8'>{assignedTeacher.email}</span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className='text-muted fst-italic'>
+                                      <i className='ki-duotone ki-information fs-6 me-1'><span className='path1'></span><span className='path2'></span><span className='path3'></span></i>
+                                      Not assigned
+                                    </span>
+                                  )}
+                                </td>
+                                <td className='text-end'>
+                                  {isEditing ? (
+                                    <div className='d-flex justify-content-end gap-2'>
+                                      <button
+                                        className='btn btn-sm btn-icon btn-light'
+                                        title='Cancel'
+                                        onClick={() => { setCtSectionId(null); setCtTeacherId(null) }}
+                                        disabled={assigningCT}
+                                      >
+                                        <i className='ki-duotone ki-cross fs-2'><span className='path1'></span><span className='path2'></span></i>
+                                      </button>
+                                      <button
+                                        className='btn btn-sm btn-icon btn-primary'
+                                        title='Save Assignment'
+                                        onClick={handleAssignClassTeacher}
+                                        disabled={assigningCT}
+                                      >
+                                        {assigningCT ? (
+                                          <span className='spinner-border spinner-border-sm align-middle'></span>
+                                        ) : (
+                                          <i className='ki-duotone ki-check fs-2 text-white'><span className='path1'></span><span className='path2'></span></i>
+                                        )}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      className={`btn btn-sm ${assignedTeacher ? 'btn-light-primary' : 'btn-primary'}`}
+                                      onClick={() => {
+                                        setCtSectionId(secId)
+                                        setCtTeacherId(assignedTeacherId || null)
+                                      }}
+                                    >
+                                      {assignedTeacher ? 'Change' : 'Assign'}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
                             )
                           })}
-                        </div>
-                      )}
-                  </div>
-                )}
-
-                {/* Teacher selector */}
-                {ctClassId && ctSectionId && (
-                  <div className='col-12'>
-                    <label className='required fw-bold fs-6 mb-2'>Select Teacher</label>
-                    <select
-                      className='form-select form-select-solid form-select-lg'
-                      value={ctTeacherId || ''}
-                      onChange={e => setCtTeacherId(Number(e.target.value))}
-                    >
-                      <option value=''>— Select Class Teacher —</option>
-                      {teachers.filter(t => t.is_active).map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} {t.profession?.name ? `(${t.profession.name})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Summary and Submit */}
-                {ctClassId && ctSectionId && ctTeacherId && (
-                  <div className='col-12'>
-                    <div className='notice d-flex bg-light-primary rounded border-primary border border-dashed p-6 mb-4'>
-                      <i className='ki-duotone ki-information-5 fs-2x text-primary me-4'><span className='path1'></span><span className='path2'></span><span className='path3'></span></i>
-                      <div>
-                        <div className='fw-bold text-primary fs-6'>Assignment Summary</div>
-                        <div className='text-gray-700 fs-7 mt-1'>
-                          <strong>{teachers.find(t => t.id === ctTeacherId)?.name}</strong> will be assigned as Class Teacher for{' '}
-                          <strong>{ctClasses.find((c: any) => c.id === ctClassId)?.name}</strong> —{' '}
-                          <strong>Section {ctSections.find((s: any) => (s.section_id || s.id) === ctSectionId)?.section?.name || ctSectionId}</strong>
-                        </div>
-                      </div>
+                        </tbody>
+                      </table>
                     </div>
-                    <button
-                      className='btn btn-primary'
-                      onClick={handleAssignClassTeacher}
-                      disabled={assigningCT}
-                    >
-                      {assigningCT
-                        ? <span className='spinner-border spinner-border-sm'></span>
-                        : <><i className='ki-duotone ki-check-circle fs-3 me-2'><span className='path1'></span><span className='path2'></span></i>Assign Class Teacher</>}
-                    </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>
