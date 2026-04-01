@@ -20,6 +20,7 @@ const StaffAttendancePage: FC = () => {
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [showSuccessModal, setShowSuccessModal] = useState(false)
+    const [activeTab, setActiveTab] = useState<'TEACHER' | 'ADMIN'>('TEACHER')
 
     // Status tracking (local modifications before save)
     // Key is a combination of staff_id and staff_type because IDs might overlap between Teacher/Admin tables
@@ -96,7 +97,9 @@ const StaffAttendancePage: FC = () => {
     const markAll = (status: string) => {
         const newEdits = { ...attendanceEdits }
         Object.keys(newEdits).forEach(key => {
-            newEdits[key].status = status
+            if (key.startsWith(activeTab)) {
+                newEdits[key].status = status
+            }
         })
         setAttendanceEdits(newEdits)
     }
@@ -124,6 +127,7 @@ const StaffAttendancePage: FC = () => {
     }
 
     const filteredAttendances = attendances.filter(a => {
+        if (a.staff_type !== activeTab) return false;
         if (!search) return true
         const name = getStaffName(a).toLowerCase()
         const designation = (a.designation || '').toLowerCase()
@@ -151,6 +155,29 @@ const StaffAttendancePage: FC = () => {
                                     {loading ? <span className='spinner-border spinner-border-sm'></span> : 'Fetch Register'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Tabs */}
+                <div className='card mb-5'>
+                    <div className='card-header card-header-stretch'>
+                        <h3 className='card-title'>Staff Categories</h3>
+                        <div className='card-toolbar'>
+                            <ul className='nav nav-tabs nav-line-tabs nav-stretch fs-6 border-0'>
+                                <li className='nav-item'>
+                                    <a className={`nav-link text-active-primary px-4 cursor-pointer ${activeTab === 'TEACHER' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('TEACHER')}>
+                                        Teaching Staff
+                                    </a>
+                                </li>
+                                <li className='nav-item'>
+                                    <a className={`nav-link text-active-primary px-4 cursor-pointer ${activeTab === 'ADMIN' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('ADMIN')}>
+                                        Admin / Non-Teaching Staff
+                                    </a>
+                                </li>
+                            </ul>
                         </div>
                     </div>
                 </div>

@@ -5,7 +5,9 @@ import {
     StaffAttendanceFetchResponse,
     MarkStaffAttendancePayload,
     ClassMonthlyMatrixResponse,
-    StudentMonthlyReportResponse
+    StudentMonthlyReportResponse,
+    StaffMonthlyMatrixResponse,
+    StaffMonthlyReportResponse
 } from './_models'
 
 const API_URL = import.meta.env.VITE_APP_API_URL
@@ -67,6 +69,35 @@ export function getStudentMonthlyReport(
 ) {
     return axios.get<StudentMonthlyReportResponse>(
         `${API_URL}/school/${schoolId}/attendance/students/${studentId}/report`,
+        {
+            params: { month, year }
+        }
+    )
+}
+
+// 7. Staff Monthly Matrix API (GET)
+// curl --location 'http://localhost:3000/api/school/[SCHOOL_ID]/attendance/staff/matrix?month=4&year=2026'
+export function getStaffMonthlyMatrix(
+    schoolId: string | number,
+    month: number,
+    year: number
+) {
+    return axios.get<StaffMonthlyMatrixResponse>(`${API_URL}/school/${schoolId}/attendance/staff/matrix`, {
+        params: { month, year }
+    })
+}
+
+// 8. Individual Staff Monthly Report API (GET)
+// curl --location 'http://localhost:3000/api/school/[SCHOOL_ID]/attendance/staff/TEACHER/1/report?month=4&year=2026'
+export function getStaffMonthlyReport(
+    schoolId: string | number,
+    staffType: 'TEACHER' | 'ADMIN',
+    staffId: string | number,
+    month: number | string,
+    year: number
+) {
+    return axios.get<StaffMonthlyReportResponse>(
+        `${API_URL}/school/${schoolId}/attendance/staff/${staffType}/${staffId}/report`,
         {
             params: { month, year }
         }

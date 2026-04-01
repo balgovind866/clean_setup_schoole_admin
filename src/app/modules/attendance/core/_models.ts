@@ -122,3 +122,64 @@ export interface StudentMonthlyReportResponse {
         };
     };
 }
+
+export interface StaffMatrixRecord {
+    staff_id: number;
+    staff_type: 'TEACHER' | 'ADMIN';
+    name: string;
+    designation: string;
+    attendance: Record<string, string>; // "YYYY-MM-DD": "STATUS"
+    summary: {
+        present: number;
+        absent: number;
+        late: number;
+        leave: number;
+        half_day: number;
+    };
+}
+
+export interface StaffMonthlyMatrixResponse {
+    success: boolean;
+    message: string;
+    data: {
+        matrix_report: {
+            month: number;
+            year: number;
+            matrix: StaffMatrixRecord[];
+        };
+    };
+}
+
+export interface StaffMonthlyRecord {
+    id: number;
+    staff_id: number;
+    staff_type: 'TEACHER' | 'ADMIN';
+    date: string;
+    status: string;
+    attendance_mode: string;
+    entry_time: string | null;
+    exit_time: string | null;
+    remark: string | null;
+}
+
+export interface StaffMonthlyReportResponse {
+    success: boolean;
+    message: string;
+    data: {
+        report: {
+            staff_id: string;
+            staff_type: string;
+            month: number;
+            year: number;
+            summary: {
+                total_marked: number;
+                present: number;
+                absent: number;
+                late: number;
+                half_day: number;
+                leave: number;
+            };
+            records: StaffMonthlyRecord[];
+        };
+    };
+}
