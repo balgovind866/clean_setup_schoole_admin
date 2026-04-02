@@ -23,6 +23,7 @@ export const academicRoutes = {
 export const feeRoutes = {
     structure: lazyLoad(() => import('../modules/fees/StructurePage'), 'StructureWrapper'),
     collection: lazyLoad(() => import('../modules/fees/CollectionPage'), 'CollectionWrapper'),
+    monthly: lazyLoad(() => import('../modules/fees/MonthlyCollectionPage'), 'MonthlyCollectionWrapper'),
     tracking: lazyLoad(() => import('../modules/fees/TrackingPage'), 'TrackingWrapper'),
     receipts: lazyLoad(() => import('../modules/fees/ReceiptsPage'), 'ReceiptsWrapper'),
     concessions: lazyLoad(() => import('../modules/fees/ConcessionsPage'), 'ConcessionsWrapper'),

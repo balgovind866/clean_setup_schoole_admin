@@ -92,6 +92,7 @@ const PrivateRoutes = () => {
 
         {/* Fees */}
         <Route path='fees/structure' element={<SuspensedView><RouteConfig.feeRoutes.structure /></SuspensedView>} />
+        <Route path='fees/monthly' element={<SuspensedView><RouteConfig.feeRoutes.monthly /></SuspensedView>} />
         <Route path='fees/collection' element={<SuspensedView><RouteConfig.feeRoutes.collection /></SuspensedView>} />
         <Route path='fees/tracking' element={<SuspensedView><RouteConfig.feeRoutes.tracking /></SuspensedView>} />
         <Route path='fees/receipts' element={<SuspensedView><RouteConfig.feeRoutes.receipts /></SuspensedView>} />

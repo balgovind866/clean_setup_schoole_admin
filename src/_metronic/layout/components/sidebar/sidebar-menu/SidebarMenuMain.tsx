@@ -90,8 +90,9 @@ const SidebarMenuMain = () => {
 
           {hasPermission('fees') && (
             <SidebarMenuItemWithSub to='/fees' title='Fees' icon='dollar' fontIcon='bi-cash-stack'>
+              <SidebarMenuItem to='/fees/monthly' title='📋 Monthly Collection' hasBullet={true} />
               <SidebarMenuItem to='/fees/structure' title='Fee Structure' hasBullet={true} />
-              <SidebarMenuItem to='/fees/collection' title='Collection' hasBullet={true} />
+              <SidebarMenuItem to='/fees/collection' title='Quick Collect' hasBullet={true} />
               <SidebarMenuItem to='/fees/tracking' title='Tracking' hasBullet={true} />
               <SidebarMenuItem to='/fees/receipts' title='Receipts' hasBullet={true} />
               <SidebarMenuItem to='/fees/concessions' title='Concessions' hasBullet={true} />
