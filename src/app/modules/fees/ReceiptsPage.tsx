@@ -211,7 +211,11 @@ const ReceiptsPage: FC = () => {
       }
       try {
         const res = await getClassSections(schoolId, filterClass)
-        if (res.data.success) setSections(res.data.data || [])
+        if (res.data.success) {
+          const raw = res.data as any
+          const list = Array.isArray(raw.data?.sections) ? raw.data.sections : (Array.isArray(raw.data) ? raw.data : [])
+          setSections(list)
+        }
       } catch (e) {
         console.error('Failed to load sections', e)
       }
