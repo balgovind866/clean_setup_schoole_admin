@@ -5,7 +5,7 @@ import { Content } from '../../../_metronic/layout/components/content'
 import clsx from 'clsx'
 import { Modal } from 'react-bootstrap'
 import { useAuth } from '../auth'
-import { collectPayment, getYearlyMatrix, getInvoiceById, updateInvoice } from './core/_requests'
+import { collectPayment, getYearlyMatrix, getInvoiceById, updateInvoice, getStudentPaymentHistory } from './core/_requests'
 import { FeeInvoiceModel } from './core/_models'
 import { getAcademicSessions, getClasses, getClassSections } from '../academic/core/_requests'
 import { getEnrollments, getStudentById } from '../students/core/_requests'
@@ -173,6 +173,9 @@ const FeeCollectionPage: FC = () => {
   const [yearlyMatrix, setYearlyMatrix] = useState<YearlyMatrixResponse | null>(null)
   const [oldBalance, setOldBalance] = useState(0)
 
+  // Payment history from API
+  const [paymentHistory, setPaymentHistory] = useState<any | null>(null)
+
   // Selection
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [checkedCells, setCheckedCells] = useState<Record<string, boolean>>({})
@@ -263,14 +266,18 @@ const FeeCollectionPage: FC = () => {
     setEnrolDetail(enrol)
     setLoadingMatrix(true)
     try {
-      const [profileRes, matrixRes] = await Promise.all([
+      const [profileRes, matrixRes, histRes] = await Promise.all([
         getStudentById(schoolId, enrol.student_id),
         getYearlyMatrix(schoolId, enrol.student_id, Number(selSession)),
+        getStudentPaymentHistory(schoolId, enrol.student_id, Number(selSession)),
       ])
       if (profileRes.data.success) setStudentDetail(profileRes.data.data.student)
-      if (matrixRes.data.success) {
-        setYearlyMatrix(matrixRes.data.data)
-        setOldBalance(0) // update if backend provides it
+      if (matrixRes.data.success) setYearlyMatrix(matrixRes.data.data)
+      if (histRes.data.success) {
+        const hist = histRes.data.data
+        setPaymentHistory(hist)
+        // Remaining dues = old balance on this ledger
+        setOldBalance(Number(hist.financial_summary?.total_remaining) || 0)
       }
     } catch (e: any) {
       setMatrixError(e.response?.data?.message || 'Failed to load fee matrix')
@@ -279,6 +286,7 @@ const FeeCollectionPage: FC = () => {
 
   const resetAll = () => {
     setStudentDetail(null); setEnrolDetail(null); setYearlyMatrix(null)
+    setPaymentHistory(null); setOldBalance(0)
     setMatrixError(null); setSelectedMonths([]); setCheckedCells({})
     setSelectedAnnualCats([])
     setAdditionalFee(0); setConcessionPct(0)
@@ -574,9 +582,17 @@ const FeeCollectionPage: FC = () => {
         setSelectedMonths([]); setCheckedCells({}); setSelectedAnnualCats([])
         setAdditionalFee(0); setConcessionPct(0); setRemark('')
         setBankName(''); setChequeNo(''); setChequeDate(''); setReferenceNo('')
-        // Reload matrix after payment
-        const matrixRes = await getYearlyMatrix(schoolId, enrolDetail.student_id, Number(selSession))
+        // Refresh matrix + payment history in parallel so all statuses update immediately
+        const [matrixRes, histRes] = await Promise.all([
+          getYearlyMatrix(schoolId, enrolDetail.student_id, Number(selSession)),
+          getStudentPaymentHistory(schoolId, enrolDetail.student_id, Number(selSession)),
+        ])
         if (matrixRes.data.success) setYearlyMatrix(matrixRes.data.data)
+        if (histRes.data.success) {
+          const hist = histRes.data.data
+          setPaymentHistory(hist)
+          setOldBalance(Number(hist.financial_summary?.total_remaining) || 0)
+        }
       } else {
         setSubmitError(data.message || 'Payment failed.')
       }
@@ -704,61 +720,113 @@ const FeeCollectionPage: FC = () => {
 
             <div className='card-body px-8 py-7'>
 
-              {/* ─ 1. Student info grid ─ */}
-              <div className='rounded-2 border border-gray-200 mb-7' style={{ background: '#f8f9fb' }}>
-                {/* Row 1 */}
+              {/* ─ 1. Student info grid (Compacted) ─ */}
+              <div className='rounded-2 border border-gray-200 mb-6' style={{ background: '#f8f9fb' }}>
                 <div className='row g-0 border-bottom border-gray-200'>
-                  {([
-                    { label: 'Date', value: <span className='badge badge-primary px-3 py-2 fw-bold fs-8'>{today}</span> },
-                    { label: 'Class (Sec.)', value: `${className}${sectionName ? ` (${sectionName})` : ''}` },
-                    { label: 'Reg.', value: enrolDetail?.student_id },
-                    { label: 'SID', value: enrolDetail?.student_id },
-                    { label: 'Roll No.', value: enrolDetail?.roll_number || '—' },
-                  ] as const).map(({ label, value }) => (
-                    <div key={label} className='col py-4 px-4 border-end border-gray-200'>
-                      <div className='text-muted fw-bold fs-9 text-uppercase mb-2'>{label}</div>
+                  {[
+                    { label: 'Student', value: `${stName} (${className}${sectionName ? ` ${sectionName}` : ''})`, flex: 2 },
+                    { label: 'Roll / SID', value: `${enrolDetail?.roll_number || '—'} / ${enrolDetail?.student_id}`, flex: 1 },
+                    { label: 'Mobile', value: mobile, flex: 1 },
+                    { label: 'Current Dues', value: <span className={clsx(oldBalance > 0 ? 'text-danger' : 'text-success')}>₹{oldBalance.toLocaleString('en-IN')}</span>, flex: 1 },
+                  ].map(({ label, value, flex }) => (
+                    <div key={label} className={clsx('py-3 px-4 border-end border-gray-200', `flex-${flex}`)} style={{ flex }}>
+                      <div className='text-muted fw-bold fs-9 text-uppercase mb-1'>{label}</div>
                       <div className='fw-bolder text-gray-800 fs-7'>{value}</div>
                     </div>
                   ))}
                 </div>
-                {/* Row 2 */}
-                <div className='row g-0 border-bottom border-gray-200'>
-                  {([
-                    { label: 'Name', value: stName },
-                    { label: 'Father', value: fatherName },
-                    { label: 'Mother', value: motherName },
-                  ] as const).map(({ label, value }) => (
-                    <div key={label} className='col-4 py-4 px-4 border-end border-gray-200'>
-                      <div className='text-muted fw-bold fs-9 text-uppercase mb-2'>{label}</div>
+                <div className='row g-0'>
+                  {[
+                    { label: 'Parent (F/M)', value: `${fatherName} / ${motherName}`, flex: 1 },
+                    { label: 'Address', value: address, flex: 2 },
+                  ].map(({ label, value, flex }) => (
+                    <div key={label} className={clsx('py-3 px-4 border-end border-gray-200', `flex-${flex}`)} style={{ flex }}>
+                      <div className='text-muted fw-bold fs-9 text-uppercase mb-1'>{label}</div>
                       <div className='fw-bolder text-gray-800 fs-7'>{value}</div>
                     </div>
                   ))}
-                </div>
-                {/* Row 3 */}
-                <div className='row g-0 border-bottom border-gray-200'>
-                  <div className='col-4 py-4 px-4 border-end border-gray-200'>
-                    <div className='text-muted fw-bold fs-9 text-uppercase mb-2'>Route</div>
-                    <div className='fw-bold text-gray-800 fs-7'>—</div>
-                  </div>
-                  <div className='col-4 py-4 px-4 border-end border-gray-200'>
-                    <div className='text-muted fw-bold fs-9 text-uppercase mb-2'>Mobile</div>
-                    <div className='fw-bold text-gray-800 fs-7'>{mobile}</div>
-                  </div>
-                  <div className='col-4 py-4 px-4'>
-                    <div className='text-muted fw-bold fs-9 text-uppercase mb-2'>Old Balance</div>
-                    <div className={clsx('fw-bolder fs-6', oldBalance > 0 ? 'text-danger' : 'text-success')}>
-                      ₹{oldBalance.toLocaleString('en-IN')}
-                    </div>
-                  </div>
-                </div>
-                {/* Row 4 */}
-                <div className='py-4 px-4'>
-                  <div className='text-muted fw-bold fs-9 text-uppercase mb-2'>Address</div>
-                  <div className='fw-semibold text-gray-700 fs-7'>{address}</div>
                 </div>
               </div>
 
-              {/* ─ 2. Month pills ─ */}
+              {/* ─ 1b. Financial Summary Strip (from payment-history API) ─ */}
+              {paymentHistory && (() => {
+                const fs = paymentHistory.financial_summary
+                const pct = Number(fs?.payment_completion_percent) || 0
+                const MONTH_ORDER = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar']
+                // sort invoices in calendar order
+                const sortedInvoices = [...(paymentHistory.invoices || [])].sort(
+                  (a: any, b: any) => MONTH_ORDER.indexOf(a.month) - MONTH_ORDER.indexOf(b.month)
+                )
+                return (
+                  <div className='rounded-2 border border-gray-200 mb-6 overflow-hidden'>
+                    {/* Header bar */}
+                    <div className='d-flex align-items-center justify-content-between px-5 py-3'
+                      style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2d6a4f 100%)' }}>
+                      <div className='d-flex align-items-center gap-2'>
+                        <i className='bi bi-bar-chart-line text-white fs-5'></i>
+                        <span className='fw-bold text-white fs-7'>Annual Fee Summary</span>
+                      </div>
+                      <span className='badge fw-bold px-3 py-2'
+                        style={{ background: pct >= 100 ? '#10b981' : pct >= 75 ? '#f59e0b' : '#ef4444', color: '#fff', borderRadius: 20 }}>
+                        {pct}% Paid
+                      </span>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div style={{ height: 5, background: '#e5e7eb' }}>
+                      <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`,
+                        background: pct >= 100 ? '#10b981' : pct >= 75 ? '#f59e0b' : '#3b82f6',
+                        transition: 'width 0.5s ease' }} />
+                    </div>
+
+                    {/* 4 stats */}
+                    <div className='row g-0' style={{ background: '#f8f9fb' }}>
+                      {[
+                        { label: 'Total Charged', value: `₹${Number(fs?.total_charged || 0).toLocaleString('en-IN')}`, color: '#374151' },
+                        { label: 'Total Paid',    value: `₹${Number(fs?.total_paid || 0).toLocaleString('en-IN')}`,    color: '#10b981' },
+                        { label: 'Fine',          value: `₹${Number(fs?.total_fine || 0).toLocaleString('en-IN')}`,      color: '#ef4444' },
+                        { label: 'Remaining',     value: `₹${Number(fs?.total_remaining || 0).toLocaleString('en-IN')}`, color: Number(fs?.total_remaining) > 0 ? '#dc2626' : '#10b981' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className='col py-3 px-4 border-end border-gray-200 text-center'>
+                          <div className='text-muted fw-bold fs-9 text-uppercase mb-1'>{label}</div>
+                          <div className='fw-bolder fs-7' style={{ color }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Month-wise invoice status row */}
+                    <div className='px-5 py-3 border-top border-gray-200'>
+                      <div className='text-muted fw-bold fs-9 text-uppercase mb-3'>Month-wise Status</div>
+                      <div className='d-flex flex-wrap gap-2'>
+                        {sortedInvoices.map((inv: any) => {
+                          const statusColor =
+                            inv.status === 'PAID'    ? { bg: '#d1fae5', text: '#065f46', icon: 'bi-check-circle-fill' } :
+                            inv.status === 'PARTIAL' ? { bg: '#fef3c7', text: '#92400e', icon: 'bi-circle-half' } :
+                            inv.status === 'OVERDUE' ? { bg: '#fee2e2', text: '#991b1b', icon: 'bi-exclamation-circle-fill' } :
+                                                       { bg: '#f3f4f6', text: '#6b7280', icon: 'bi-circle' }
+                          const remaining = Number(inv.remaining_amount)
+                          return (
+                            <div key={inv.invoice_id}
+                              className='d-flex flex-column align-items-center rounded-2 px-2 py-2'
+                              style={{ background: statusColor.bg, minWidth: 58, border: `1px solid ${statusColor.bg}` }}
+                              title={`${inv.month}: ₹${Number(inv.net_amount).toLocaleString('en-IN')} | Paid: ₹${Number(inv.paid_amount).toLocaleString('en-IN')} | Remaining: ₹${remaining.toLocaleString('en-IN')}`}>
+                              <i className={`bi ${statusColor.icon} mb-1`} style={{ color: statusColor.text, fontSize: '0.8rem' }}></i>
+                              <span className='fw-bolder fs-9' style={{ color: statusColor.text }}>{inv.month}</span>
+                              {remaining > 0 && (
+                                <span className='fw-semibold' style={{ color: statusColor.text, fontSize: '0.58rem' }}>
+                                  ₹{remaining >= 1000 ? `${(remaining/1000).toFixed(0)}k` : remaining}
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+
               <div className='mb-6'>
                 <div className='d-flex align-items-center justify-content-between mb-4'>
                   <div className='d-flex align-items-center gap-2'>
@@ -1113,35 +1181,58 @@ const FeeCollectionPage: FC = () => {
             <p className='mb-0 fs-8 opacity-75'>Receipt ID: TXN-{lastReceipt?.id || '—'}</p>
           </div>
           <div className='p-6'>
-            <div className='rounded p-4 mb-4 d-flex flex-stack' style={{ background: '#f8f9fb' }}>
+            {/* Amount & Student Summary */}
+            <div className='rounded p-4 mb-5 d-flex flex-stack' style={{ background: '#f8f9fb', border: '1px solid #e5e7eb' }}>
               <div>
                 <div className='text-muted fs-9 fw-bold text-uppercase mb-1'>Student</div>
-                <div className='fw-bolder text-gray-900'>{stName}</div>
+                <div className='fw-bolder text-gray-900 fs-7'>{stName}</div>
                 <div className='text-muted fs-8'>{className}{sectionName ? ` (${sectionName})` : ''}</div>
               </div>
               <div className='text-end'>
                 <div className='text-muted fs-9 fw-bold text-uppercase mb-1'>Amount Paid</div>
-                <div className='text-success fw-bolder' style={{ fontSize: '1.8rem' }}>
+                <div className='text-success fw-bolder' style={{ fontSize: '1.6rem', lineHeight: 1.2 }}>
                   ₹{Number(lastReceipt?.amount_paid || 0).toLocaleString('en-IN')}
                 </div>
               </div>
             </div>
-            <div className='row g-3 fs-8 mb-5'>
+
+            {/* Payment Details */}
+            <div className='row g-3 fs-8 mb-6'>
               <div className='col-6'>
-                <div className='text-muted mb-1'>Mode</div>
-                <div className='fw-bold'>{lastReceipt?.payment_mode || paymentMode}</div>
+                <div className='text-muted fw-bold text-uppercase fs-9 mb-1'>Payment Mode</div>
+                <div className='fw-bold text-gray-800 d-flex align-items-center gap-1'>
+                  <i className='bi bi-credit-card text-primary'></i>
+                  {lastReceipt?.payment_mode || paymentMode}
+                </div>
               </div>
               <div className='col-6'>
-                <div className='text-muted mb-1'>Date</div>
-                <div className='fw-bold'>{today}</div>
+                <div className='text-muted fw-bold text-uppercase fs-9 mb-1'>Date</div>
+                <div className='fw-bold text-gray-800'>
+                  {lastReceipt?.payment_date ? new Date(lastReceipt.payment_date).toLocaleDateString('en-GB', {
+                    day: '2-digit', month: 'short', year: 'numeric'
+                  }) : today}
+                </div>
               </div>
             </div>
+
+            {/* Balance Remaining - The "Remain" the user requested */}
+            <div className='rounded-2 px-4 py-3 mb-6 d-flex align-items-center justify-content-between' 
+              style={{ background: '#fff', border: '1px dashed #e4e6ef' }}>
+              <span className='text-muted fw-bold fs-8'>Balance Remaining</span>
+              <span className={clsx('fw-bolder fs-6', oldBalance > 0 ? 'text-danger' : 'text-success')}>
+                ₹{oldBalance.toLocaleString('en-IN')}
+              </span>
+            </div>
+
+            {/* Actions */}
             <div className='d-flex gap-3'>
-              <button className='btn btn-light-success fw-bold flex-grow-1 fs-8'>
-                <i className='bi bi-printer me-1'></i>Print Receipt
+              <button className='btn btn-light-success fw-bold flex-grow-1 fs-8 py-3'>
+                <i className='bi bi-printer me-2'></i>Print Receipt
               </button>
-              <button className='btn btn-primary fw-bold flex-grow-1 fs-8'
-                onClick={() => setShowModal(false)}>Done</button>
+              <button className='btn btn-primary fw-bolder flex-grow-1 fs-8 py-3 shadow-sm'
+                onClick={() => setShowModal(false)}>
+                Done
+              </button>
             </div>
           </div>
         </Modal.Body>

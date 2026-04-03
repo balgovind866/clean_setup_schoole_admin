@@ -101,6 +101,18 @@ export const getYearlyMatrix = (
     `${BASE(schoolId)}/students/${studentId}/sessions/${sessionId}/yearly-matrix`
   )
 
+// GET /students/:studentId/payment-history?academic_session_id=N
+// Returns financial_summary + invoice list + payment transactions
+export const getStudentPaymentHistory = (
+  schoolId: string | number,
+  studentId: number,
+  sessionId: number
+) =>
+  axios.get<ApiResponse<any>>(
+    `${BASE(schoolId)}/students/${studentId}/payment-history`,
+    { params: { academic_session_id: sessionId } }
+  )
+
 // GET /fee/invoices/:id  – fetch single invoice with items + payment history
 export const getInvoiceById = (schoolId: string | number, invoiceId: number) =>
   axios.get<ApiResponse<FeeInvoiceModel>>(`${BASE(schoolId)}/invoices/${invoiceId}`)
