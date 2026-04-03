@@ -37,9 +37,11 @@ export const updateExamGroup = (schoolId: string | number, id: number, payload: 
 export const deleteExamGroup = (schoolId: string | number, id: number) =>
   axios.delete(`${BASE(schoolId)}/groups/${id}`)
 
-// ─── Group Classes ────────────────────────────────────────────────────────────
 export const assignClassesToGroup = (schoolId: string | number, groupId: number, classes: { class_id: number; section_id: number }[]) =>
   axios.post<{ success: boolean; data: ExamGroup }>(`${BASE(schoolId)}/groups/${groupId}/classes`, { classes })
+
+export const removeClassesFromGroup = (schoolId: string | number, groupId: number, mappingId: number) =>
+  axios.delete(`${BASE(schoolId)}/groups/${groupId}/classes/${mappingId}`)
 
 // ─── Exam Subjects ────────────────────────────────────────────────────────────
 export const getGroupExams = (schoolId: string | number, groupId: number) =>

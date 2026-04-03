@@ -226,9 +226,32 @@ const ExamsPage: FC = () => {
     setClassAssigning(true)
     try {
       await assignClassesToGroup(schoolId, selectedGroup.id, valid.map(r => ({ class_id: Number(r.class_id), section_id: Number(r.section_id) })))
-      loadGroups()
+      const { data } = await getExamGroups(schoolId)
+      if (data.success) {
+        setGroups(data.data || [])
+        const updated = data.data.find((g: any) => g.id === selectedGroup.id)
+        if (updated) setSelectedGroup(updated)
+      }
+      setClassRows([{ class_id: '', section_id: '', sections: [] }])
       setWizardTab('subjects')
-    } catch { } finally { setClassAssigning(false) }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to assign classes. Please try again.')
+    } finally { setClassAssigning(false) }
+  }
+
+  const removeGroupClass = async (mappingId: number) => {
+    if (!selectedGroup || !window.confirm('Remove this class from group?')) return
+    try {
+      await removeClassesFromGroup(schoolId, selectedGroup.id, mappingId)
+      const { data } = await getExamGroups(schoolId)
+      if (data.success) {
+        setGroups(data.data || [])
+        const updated = data.data.find((g: any) => g.id === selectedGroup.id)
+        if (updated) setSelectedGroup(updated)
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to remove class.')
+    }
   }
 
   const addExamSubjects = async () => {
@@ -244,7 +267,20 @@ const ExamsPage: FC = () => {
       if (r.data.success) setGroupExams(r.data.data || [])
       setSubjectRows([{ subject_id: '', max_marks: '100', min_marks: '33', credit_hours: '' }])
       setWizardTab('schedule')
-    } catch { } finally { setSubjectSaving(false) }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to add subjects.')
+    } finally { setSubjectSaving(false) }
+  }
+
+  const removeExamSubject = async (examId: number) => {
+    if (!selectedGroup || !window.confirm('Delete this subject from group?')) return
+    try {
+      await deleteExamSubject(schoolId, selectedGroup.id, examId)
+      const { data } = await getGroupExams(schoolId, selectedGroup.id)
+      if (data.success) setGroupExams(data.data || [])
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete subject.')
+    }
   }
 
   const addSchedules = async () => {
@@ -254,12 +290,17 @@ const ExamsPage: FC = () => {
     try {
       await createSchedule(schoolId, selectedGroup.id, valid.map(r => ({
         exam_id: Number(r.exam_id), section_id: Number(r.section_id),
-        date: r.date, start_time: r.start_time, end_time: r.end_time, room_no: r.room_no || undefined,
+        date: r.date, 
+        start_time: r.start_time.length === 5 ? `${r.start_time}:00` : r.start_time, 
+        end_time: r.end_time.length === 5 ? `${r.end_time}:00` : r.end_time, 
+        room_no: r.room_no || undefined,
       })))
       const { data } = await getGroupSchedule(schoolId, selectedGroup.id)
       if (data.success) setSchedules(data.data || [])
       setScheduleRows([{ exam_id: '', section_id: '', date: '', start_time: '09:00', end_time: '12:00', room_no: '' }])
-    } catch { } finally { setScheduleSaving(false) }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to save schedules. Please check your data.')
+    } finally { setScheduleSaving(false) }
   }
 
   useEffect(() => { loadMeta(); loadGroups(); loadGrades() }, [loadMeta, loadGroups, loadGrades])
@@ -308,29 +349,29 @@ const ExamsPage: FC = () => {
                       <p className='text-muted fw-semibold'>No exam groups yet. Create one to get started.</p>
                     </div>
                   ) : (
-                    <div className='d-flex flex-column gap-3'>
+                    <div className='d-flex flex-column gap-2'>
                       {groups.map(g => (
                         <div key={g.id}
-                          className={`rounded-2 border p-4 cursor-pointer transition-all ${selectedGroup?.id === g.id ? 'border-primary bg-light-primary' : 'border-gray-200 bg-light'}`}
+                          className={`rounded border p-3 transition-all ${selectedGroup?.id === g.id ? 'border-primary' : 'border-gray-200'}`}
                           style={{ cursor: 'pointer' }}
                           onClick={() => openGroupDetail(g)}>
-                          <div className='d-flex justify-content-between align-items-start'>
-                            <div>
-                              <div className='fw-bolder text-gray-800 fs-6'>{g.name}</div>
-                              <div className='text-muted fs-8 mt-1'>
-                                {g.academic_session?.session_year} · {g.type}
-                                {g.classes?.length ? ` · ${g.classes.length} class(es)` : ''}
+                          <div className='d-flex justify-content-between align-items-center'>
+                            <div className="flex-grow-1">
+                              <div className='fw-bold text-gray-800 fs-7'>{g.name}</div>
+                              <div className='text-muted fs-9 mt-1'>
+                                {g.academic_session?.session_year} &middot; {g.type}
+                                {g.classes?.length ? ` &middot; ${g.classes.length} Classes` : ''}
                               </div>
                             </div>
-                            <div className='d-flex align-items-center gap-2'>
-                              <span className={`badge badge-light-${STATUS_COLOR[g.status]} fw-bold`}>{g.status}</span>
-                              <button className='btn btn-icon btn-sm btn-light-warning' title='Edit'
+                            <div className='d-flex align-items-center gap-1'>
+                              <span className='badge badge-light fw-bold fs-9 text-uppercase px-2 py-1'>{g.status}</span>
+                              <button className='btn btn-icon btn-sm btn-light' title='Edit'
                                 onClick={e => { e.stopPropagation(); openGroupModal(g) }}>
-                                <i className='ki-duotone ki-pencil fs-5'><span className='path1' /><span className='path2' /></i>
+                                <i className='ki-duotone ki-pencil fs-6 text-primary'><span className='path1' /><span className='path2' /></i>
                               </button>
-                              <button className='btn btn-icon btn-sm btn-light-danger' title='Delete'
+                              <button className='btn btn-icon btn-sm btn-light' title='Delete'
                                 onClick={e => { e.stopPropagation(); removeGroup(g.id) }}>
-                                <i className='ki-duotone ki-trash fs-5'><span className='path1' /><span className='path2' /></i>
+                                <i className='ki-duotone ki-trash fs-6 text-danger'><span className='path1' /><span className='path2' /></i>
                               </button>
                             </div>
                           </div>
@@ -375,20 +416,42 @@ const ExamsPage: FC = () => {
                       <div>
                         {/* Already assigned */}
                         {selectedGroup.classes?.length ? (
-                          <div className='mb-5'>
-                            <div className='fw-bold text-gray-700 fs-7 mb-3 text-uppercase'>Assigned Classes</div>
-                            <div className='d-flex flex-wrap gap-2'>
-                              {selectedGroup.classes.map(c => (
-                                <span key={c.id} className='badge badge-light-success fw-semibold py-2 px-4 fs-8'>
-                                  {c.class?.name} – {c.section?.name}
-                                </span>
-                              ))}
+                          <div className='mb-8'>
+                            <div className='fw-bold text-gray-800 fs-6 mb-3 text-uppercase border-bottom pb-2'>
+                               Assigned Classes
                             </div>
-                            <div className='separator my-5' />
+                            <div className='table-responsive'>
+                              <table className='table table-row-dashed align-middle gs-0 gy-3 mb-0'>
+                                <thead>
+                                  <tr className='text-muted fs-8 fw-bold text-uppercase border-bottom-0'>
+                                    <th className='ps-0'>Class & Section</th>
+                                    <th className='text-end pe-0'>Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {selectedGroup.classes.map(c => (
+                                    <tr key={c.id}>
+                                      <td className='ps-0'>
+                                        <span className='fw-bold text-gray-800 fs-7'>
+                                          {c.class?.name} – {c.section?.name}
+                                        </span>
+                                      </td>
+                                      <td className='text-end pe-0'>
+                                        <button className='btn btn-icon btn-sm btn-light-danger btn-active-danger' 
+                                          onClick={() => removeGroupClass(c.id)} title="Remove Class">
+                                          <i className='ki-duotone ki-trash fs-5'><span className='path1'/><span className='path2'/><span className='path3'/><span className='path4'/><span className='path5'/></i>
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                            <div className="separator separator-dashed my-8"></div>
                           </div>
                         ) : null}
 
-                        <div className='fw-bold text-gray-700 fs-7 mb-3 text-uppercase'>Add More Classes</div>
+                        <div className='fw-bold text-gray-800 fs-6 mb-3 text-uppercase'>Assign New Classes</div>
                         {classRows.map((row, idx) => (
                           <div key={idx} className='row g-3 mb-3 align-items-end'>
                             <div className='col-5'>
@@ -427,38 +490,46 @@ const ExamsPage: FC = () => {
                             </div>
                           </div>
                         ))}
-                        <button className='btn btn-primary mt-4' onClick={assignClasses} disabled={classAssigning}>
-                          {classAssigning ? <span className='spinner-border spinner-border-sm me-2' /> : null}
-                          Save & Next →
-                        </button>
+                        <div className='mt-6 text-end'>
+                          <button className='btn btn-primary d-flex align-items-center ms-auto' onClick={assignClasses} disabled={classAssigning}>
+                            {classAssigning ? <span className='spinner-border spinner-border-sm me-2' /> : null}
+                            Save & Next Subjects →
+                          </button>
+                        </div>
                       </div>
                     )}
 
                     {/* Subjects Tab */}
                     {wizardTab === 'subjects' && (
                       <div>
-                        {/* Existing subjects */}
-                        {groupExams.length > 0 && (
-                          <div className='mb-5'>
-                            <div className='fw-bold text-gray-700 fs-7 mb-3 text-uppercase'>Current Subjects</div>
+                        {/* Added subjects */}
+                        {groupExams.length ? (
+                          <div className='mb-8'>
+                            <div className='fw-bold text-gray-800 fs-6 mb-3 text-uppercase border-bottom pb-2'>Added Subjects</div>
                             <div className='table-responsive'>
-                              <table className='table align-middle table-row-dashed fs-7 gy-3'>
+                              <table className='table table-row-dashed align-middle gs-0 gy-3 mb-0'>
                                 <thead>
-                                  <tr className='text-gray-400 fw-bold text-uppercase fs-8'>
-                                    <th>Subject</th><th>Max Marks</th><th>Min Marks</th><th>Type</th><th>Action</th>
+                                  <tr className='text-muted fs-8 fw-bold text-uppercase border-bottom-0'>
+                                    <th className='ps-0'>Subject</th>
+                                    <th>Marks (Max/Min)</th>
+                                    <th className='text-end pe-0'>Action</th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {groupExams.map(e => (
-                                    <tr key={e.id}>
-                                      <td className='fw-semibold'>{e.subject?.name || `Subject #${e.subject_id}`}</td>
-                                      <td>{e.max_marks}</td>
-                                      <td>{e.min_marks}</td>
-                                      <td><span className='badge badge-light-info'>{e.exam_type}</span></td>
+                                  {groupExams.map(ex => (
+                                    <tr key={ex.id}>
+                                      <td className='ps-0'>
+                                        <div className="d-flex flex-column">
+                                           <span className='fw-bold text-gray-800 fs-7'>{ex.subject?.name}</span>
+                                           <span className="text-muted fs-8">Type: {ex.exam_type}</span>
+                                        </div>
+                                      </td>
                                       <td>
-                                        <button className='btn btn-icon btn-sm btn-light-danger'
-                                          onClick={async () => { await deleteExamSubject(schoolId, selectedGroup.id, e.id); const r = await getGroupExams(schoolId, selectedGroup.id); if (r.data.success) setGroupExams(r.data.data || []) }}>
-                                          <i className='ki-duotone ki-trash fs-5'><span className='path1' /><span className='path2' /></i>
+                                          <span className="fw-bold">{ex.max_marks} / {ex.min_marks}</span>
+                                      </td>
+                                      <td className='text-end pe-0'>
+                                        <button className='btn btn-icon btn-sm btn-light-danger' onClick={() => removeExamSubject(ex.id)}>
+                                          <i className='ki-duotone ki-trash fs-5'><span className='path1'/><span className='path2'/><span className='path3'/><span className='path4'/><span className='path5'/></i>
                                         </button>
                                       </td>
                                     </tr>
@@ -466,10 +537,11 @@ const ExamsPage: FC = () => {
                                 </tbody>
                               </table>
                             </div>
-                            <div className='separator my-5' />
+                            <div className="separator separator-dashed my-8"></div>
                           </div>
-                        )}
-                        <div className='fw-bold text-gray-700 fs-7 mb-3 text-uppercase'>Add Subjects</div>
+                        ) : null}
+
+                        <div className='fw-bold text-gray-800 fs-6 mb-3 text-uppercase'>Add More Subjects</div>
                         {subjectRows.map((row, idx) => (
                           <div key={idx} className='row g-3 mb-3 align-items-end'>
                             <div className='col-4'>
@@ -477,23 +549,18 @@ const ExamsPage: FC = () => {
                               <select className='form-select form-select-sm form-select-solid' value={row.subject_id}
                                 onChange={e => { const r = [...subjectRows]; r[idx].subject_id = e.target.value; setSubjectRows(r) }}>
                                 <option value=''>Select Subject</option>
-                                {allSubjects.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                {allSubjects.map((s: any) => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
                               </select>
                             </div>
-                            <div className='col-2'>
+                            <div className='col-3'>
                               <label className='form-label fs-8 fw-semibold mb-1'>Max Marks</label>
                               <input className='form-control form-control-sm form-control-solid' type='number' value={row.max_marks}
                                 onChange={e => { const r = [...subjectRows]; r[idx].max_marks = e.target.value; setSubjectRows(r) }} />
                             </div>
-                            <div className='col-2'>
+                            <div className='col-3'>
                               <label className='form-label fs-8 fw-semibold mb-1'>Min Marks</label>
                               <input className='form-control form-control-sm form-control-solid' type='number' value={row.min_marks}
                                 onChange={e => { const r = [...subjectRows]; r[idx].min_marks = e.target.value; setSubjectRows(r) }} />
-                            </div>
-                            <div className='col-2'>
-                              <label className='form-label fs-8 fw-semibold mb-1'>Credits</label>
-                              <input className='form-control form-control-sm form-control-solid' type='number' value={row.credit_hours}
-                                onChange={e => { const r = [...subjectRows]; r[idx].credit_hours = e.target.value; setSubjectRows(r) }} />
                             </div>
                             <div className='col-2'>
                               {idx === subjectRows.length - 1 ? (
@@ -510,11 +577,11 @@ const ExamsPage: FC = () => {
                             </div>
                           </div>
                         ))}
-                        <div className='d-flex gap-3 mt-4'>
-                          <button className='btn btn-light' onClick={() => setWizardTab('classes')}>← Back</button>
-                          <button className='btn btn-primary' onClick={addExamSubjects} disabled={subjectSaving}>
+                        <div className='d-flex gap-3 mt-8 justify-content-between text-end'>
+                          <button className='btn btn-light' onClick={() => setWizardTab('classes')}>← Back to Classes</button>
+                          <button className='btn btn-primary d-flex align-items-center' onClick={addExamSubjects} disabled={subjectSaving}>
                             {subjectSaving ? <span className='spinner-border spinner-border-sm me-2' /> : null}
-                            Save & Next →
+                            Save & Next Schedule →
                           </button>
                         </div>
                       </div>
@@ -523,92 +590,122 @@ const ExamsPage: FC = () => {
                     {/* Schedule Tab */}
                     {wizardTab === 'schedule' && (
                       <div>
-                        {/* Existing schedules */}
-                        {schedules.length > 0 && (
-                          <div className='mb-5'>
-                            <div className='fw-bold text-gray-700 fs-7 mb-3 text-uppercase'>Current Schedule</div>
-                            <div className='table-responsive'>
-                              <table className='table align-middle table-row-dashed fs-7 gy-3'>
-                                <thead>
-                                  <tr className='text-gray-400 fw-bold text-uppercase fs-8'>
-                                    <th>Exam ID</th><th>Date</th><th>Time</th><th>Room</th><th>Action</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {schedules.map(s => (
-                                    <tr key={s.id}>
-                                      <td><span className='badge badge-light-primary'>Exam #{s.exam_id}</span></td>
-                                      <td className='fw-semibold'>{new Date(s.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                                      <td className='text-muted'>{s.start_time} – {s.end_time}</td>
-                                      <td>{s.room_no || '—'}</td>
-                                      <td>
-                                        <button className='btn btn-icon btn-sm btn-light-danger'
-                                          onClick={async () => { await deleteSchedule(schoolId, selectedGroup.id, s.id); const { data } = await getGroupSchedule(schoolId, selectedGroup.id); if (data.success) setSchedules(data.data || []) }}>
-                                          <i className='ki-duotone ki-trash fs-5'><span className='path1' /><span className='path2' /></i>
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                            <div className='separator my-5' />
+                        {groupExams.length === 0 ? (
+                           <div className="alert alert-warning d-flex align-items-center p-5">
+                             <i className="ki-duotone ki-information-5 fs-2hx text-warning me-4"><span className="path1"/><span className="path2"/><span className="path3"/></i>
+                             <div className="d-flex flex-column">
+                                <h4 className="mb-1 text-warning">No Subjects Configured</h4>
+                                <span>Please configure exam subjects (previous step) before setting the schedule.</span>
+                             </div>
+                           </div>
+                        ) : (
+                          <div className="mb-8">
+                             {groupExams.map((exam, examIdx) => {
+                               return (
+                                 <div key={exam.id} className={`${examIdx !== 0 ? 'mt-10' : ''}`}>
+                                    <div className="d-flex align-items-center mb-5 border-bottom pb-3">
+                                        <h4 className="fw-bold text-gray-800 m-0">
+                                            {exam.subject?.name} <span className="text-muted ms-2 fs-7 fw-medium">(Code: {exam.subject?.code || exam.subject_id})</span>
+                                        </h4>
+                                    </div>
+                                    <div className="">
+                                       {groupClassSections.length === 0 ? (
+                                           <span className="text-muted">No classes/sections mapped to this group.</span>
+                                       ) : (
+                                          <div className="table-responsive">
+                                              <table className="table table-row-dashed align-middle mb-0 gs-0 gy-3">
+                                                  <thead>
+                                                      <tr className="text-muted fw-bold fs-8 text-uppercase border-bottom-0">
+                                                          <th className="w-200px ps-0">Section</th>
+                                                          <th className="min-w-150px">Date</th>
+                                                          <th className="min-w-200px">Time (Start - End)</th>
+                                                          <th className="min-w-100px">Room No</th>
+                                                          <th className="w-50px text-end pe-0">Action</th>
+                                                      </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                      {groupClassSections.map(c => {
+                                                         const existingDbItem = schedules.find(s => s.exam_id === exam.id && s.section_id === c.section_id);
+                                                         const draftIdx = scheduleRows.findIndex(r => Number(r.exam_id) === exam.id && Number(r.section_id) === c.section_id);
+                                                         const isDraft = draftIdx > -1;
+                                                         const draftRow = isDraft ? scheduleRows[draftIdx] : null;
+
+                                                         if (existingDbItem) {
+                                                            return (
+                                                              <tr key={c.id}>
+                                                                 <td className="ps-0 py-4">
+                                                                    <div className="d-flex align-items-center">
+                                                                       <i className="ki-duotone ki-check-circle fs-2 text-primary me-2"><span className="path1"/><span className="path2"/></i>
+                                                                       <span className="fw-bold text-gray-800">Section {c.section?.name || `#${c.section_id}`}</span>
+                                                                    </div>
+                                                                 </td>
+                                                                 <td className="text-gray-800 fw-semibold">{new Date(existingDbItem.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                                                                 <td><span className="text-gray-700 fw-bold">{existingDbItem.start_time} - {existingDbItem.end_time}</span></td>
+                                                                 <td><span className="text-muted fw-semibold">{existingDbItem.room_no || '—'}</span></td>
+                                                                 <td className="text-end pe-0">
+                                                                     <button className="btn btn-icon btn-sm btn-light-danger" title="Delete Schedule"
+                                                                        onClick={async () => { await deleteSchedule(schoolId, selectedGroup.id, existingDbItem.id); const { data } = await getGroupSchedule(schoolId, selectedGroup.id); if (data.success) setSchedules(data.data || []) }}
+                                                                     >
+                                                                         <i className="ki-duotone ki-trash fs-5"><span className="path1"/><span className="path2"/><span className="path3"/><span className="path4"/><span className="path5"/></i>
+                                                                     </button>
+                                                                 </td>
+                                                              </tr>
+                                                            )
+                                                         }
+                                                         
+                                                         return (
+                                                            <tr key={c.id} className="border-bottom border-gray-200 border-bottom-dashed bg-hover-light">
+                                                               <td className="py-3">
+                                                                 <div className="form-check form-check-custom form-check-sm">
+                                                                   <input className="form-check-input border-gray-400" type="checkbox" checked={isDraft}
+                                                                     onChange={(e) => {
+                                                                        if (e.target.checked) setScheduleRows([...scheduleRows, { exam_id: String(exam.id), section_id: String(c.section_id), date: '', start_time: '09:00', end_time: '12:00', room_no: '' }]);
+                                                                        else setScheduleRows(scheduleRows.filter(r => !(Number(r.exam_id) === exam.id && Number(r.section_id) === c.section_id)));
+                                                                     }}
+                                                                   />
+                                                                   <label className="form-check-label fw-bold text-gray-700 cursor-pointer">Section {c.section?.name || `#${c.section_id}`}</label>
+                                                                 </div>
+                                                               </td>
+                                                               <td>
+                                                                 <input type="date" className="form-control form-control-sm form-control-solid" value={draftRow?.date || ''} disabled={!isDraft}
+                                                                   onChange={(e) => { const r = [...scheduleRows]; r[draftIdx].date = e.target.value; setScheduleRows(r); }}
+                                                                 />
+                                                               </td>
+                                                               <td>
+                                                                 <div className="d-flex align-items-center gap-2">
+                                                                     <input type="time" className="form-control form-control-sm form-control-solid w-120px" value={draftRow?.start_time || ''} disabled={!isDraft}
+                                                                       onChange={(e) => { const r = [...scheduleRows]; r[draftIdx].start_time = e.target.value; setScheduleRows(r); }}
+                                                                     />
+                                                                     <span className="text-muted fw-bold">-</span>
+                                                                     <input type="time" className="form-control form-control-sm form-control-solid w-120px" value={draftRow?.end_time || ''} disabled={!isDraft}
+                                                                       onChange={(e) => { const r = [...scheduleRows]; r[draftIdx].end_time = e.target.value; setScheduleRows(r); }}
+                                                                     />
+                                                                 </div>
+                                                               </td>
+                                                               <td>
+                                                                 <input type="text" placeholder="e.g. 101" className="form-control form-control-sm form-control-solid" value={draftRow?.room_no || ''} disabled={!isDraft}
+                                                                   onChange={(e) => { const r = [...scheduleRows]; r[draftIdx].room_no = e.target.value; setScheduleRows(r); }}
+                                                                 />
+                                                               </td>
+                                                               <td></td>
+                                                            </tr>
+                                                         );
+                                                      })}
+                                                  </tbody>
+                                              </table>
+                                          </div>
+                                       )}
+                                    </div>
+                                 </div>
+                               );
+                             })}
                           </div>
                         )}
-                        <div className='fw-bold text-gray-700 fs-7 mb-3 text-uppercase'>Add Schedule</div>
-                        {scheduleRows.map((row, idx) => (
-                          <div key={idx} className='row g-3 mb-3 align-items-end'>
-                            <div className='col-3'>
-                              <label className='form-label fs-8 fw-semibold mb-1'>Exam (Subject)</label>
-                              <select className='form-select form-select-sm form-select-solid' value={row.exam_id}
-                                onChange={e => { const r = [...scheduleRows]; r[idx].exam_id = e.target.value; setScheduleRows(r) }}>
-                                <option value=''>Select</option>
-                                {groupExams.map(e => <option key={e.id} value={e.id}>{e.subject?.name || `#${e.id}`}</option>)}
-                              </select>
-                            </div>
-                            <div className='col-2'>
-                              <label className='form-label fs-8 fw-semibold mb-1'>Section</label>
-                              <select className='form-select form-select-sm form-select-solid' value={row.section_id}
-                                onChange={e => { const r = [...scheduleRows]; r[idx].section_id = e.target.value; setScheduleRows(r) }}>
-                                <option value=''>Select</option>
-                                {groupClassSections.map(c => <option key={c.id} value={c.section_id}>{c.section?.name || `#${c.section_id}`}</option>)}
-                              </select>
-                            </div>
-                            <div className='col-2'>
-                              <label className='form-label fs-8 fw-semibold mb-1'>Date</label>
-                              <input className='form-control form-control-sm form-control-solid' type='date' value={row.date}
-                                onChange={e => { const r = [...scheduleRows]; r[idx].date = e.target.value; setScheduleRows(r) }} />
-                            </div>
-                            <div className='col-2'>
-                              <label className='form-label fs-8 fw-semibold mb-1'>Start</label>
-                              <input className='form-control form-control-sm form-control-solid' type='time' value={row.start_time}
-                                onChange={e => { const r = [...scheduleRows]; r[idx].start_time = e.target.value; setScheduleRows(r) }} />
-                            </div>
-                            <div className='col-2'>
-                              <label className='form-label fs-8 fw-semibold mb-1'>End</label>
-                              <input className='form-control form-control-sm form-control-solid' type='time' value={row.end_time}
-                                onChange={e => { const r = [...scheduleRows]; r[idx].end_time = e.target.value; setScheduleRows(r) }} />
-                            </div>
-                            <div className='col-1'>
-                              {idx === scheduleRows.length - 1 ? (
-                                <button className='btn btn-sm btn-icon btn-light-primary w-100'
-                                  onClick={() => setScheduleRows([...scheduleRows, { exam_id: '', section_id: '', date: '', start_time: '09:00', end_time: '12:00', room_no: '' }])}>
-                                  <i className='ki-duotone ki-plus fs-4'><span className='path1' /><span className='path2' /></i>
-                                </button>
-                              ) : (
-                                <button className='btn btn-sm btn-icon btn-light-danger w-100'
-                                  onClick={() => setScheduleRows(scheduleRows.filter((_, i) => i !== idx))}>
-                                  <i className='ki-duotone ki-minus fs-4'><span className='path1' /></i>
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        <div className='d-flex gap-3 mt-4'>
-                          <button className='btn btn-light' onClick={() => setWizardTab('subjects')}>← Back</button>
-                          <button className='btn btn-primary' onClick={addSchedules} disabled={scheduleSaving}>
-                            {scheduleSaving ? <span className='spinner-border spinner-border-sm me-2' /> : null}
-                            Save Schedule
+                        <div className='d-flex justify-content-between mt-6'>
+                          <button className='btn btn-light' onClick={() => setWizardTab('subjects')}>← Back to Subjects</button>
+                          <button className='btn btn-primary' onClick={addSchedules} disabled={scheduleSaving || scheduleRows.filter(r => r.exam_id && r.section_id && r.date).length === 0}>
+                            {scheduleSaving ? <span className='spinner-border spinner-border-sm me-2' /> : <i className='ki-duotone ki-check fs-2'><span className="path1"/><span className="path2"/></i>}
+                            Save Checked Schedules
                           </button>
                         </div>
                       </div>

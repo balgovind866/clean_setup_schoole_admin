@@ -5,6 +5,7 @@ import {LayoutProvider, LayoutSplashScreen} from '../_metronic/layout/core'
 import {MasterInit} from '../_metronic/layout/MasterInit'
 import {AuthInit} from './modules/auth'
 import {ThemeModeProvider} from '../_metronic/partials'
+import {NetworkErrorBoundary} from '../_metronic/layout/components/NetworkErrorBoundary'
 
 const App = () => {
   return (
@@ -13,6 +14,7 @@ const App = () => {
         <LayoutProvider>
           <ThemeModeProvider>
             <AuthInit>
+              <NetworkErrorBoundary />
               <Outlet />
               <MasterInit />
             </AuthInit>
