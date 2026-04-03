@@ -92,6 +92,15 @@ export const getStudentDues = (
     `${BASE(schoolId)}/students/${studentId}/sessions/${sessionId}/dues`
   )
 
+export const getYearlyMatrix = (
+  schoolId: string | number,
+  studentId: number,
+  sessionId: number
+) =>
+  axios.get<ApiResponse<any>>(
+    `${BASE(schoolId)}/students/${studentId}/sessions/${sessionId}/yearly-matrix`
+  )
+
 // ─── Payments ─────────────────────────────────────────────────────────────────
 export const collectPayment = (schoolId: string | number, payload: CollectPaymentPayload) =>
   axios.post<ApiResponse<FeePaymentModel>>(`${BASE(schoolId)}/payments/collect`, payload)

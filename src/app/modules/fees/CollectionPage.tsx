@@ -208,13 +208,15 @@ const CollectionPage: FC = () => {
 
                   <div className='mb-5'>
                     <label className='required fw-semibold fs-6 mb-2'>Student</label>
-                    <select className='form-select form-select-solid' value={collectForm.student_id}
-                      onChange={e => setCollectForm(p => ({ ...p, student_id: e.target.value }))}>
-                      <option value=''>Search / Select student...</option>
-                      {students.map((s: any) => (
-                        <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>
-                      ))}
-                    </select>
+                    <div className='d-flex gap-3'>
+                      <select className='form-select form-select-solid' value={collectForm.student_id}
+                        onChange={e => setCollectForm(p => ({ ...p, student_id: e.target.value }))}>
+                        <option value=''>Search / Select student...</option>
+                        {students.map((s: any) => (
+                          <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div className='mb-5'>

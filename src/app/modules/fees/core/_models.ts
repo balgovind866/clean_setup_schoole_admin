@@ -111,6 +111,26 @@ export interface GenerateInvoicesPayload {
   due_date: string
 }
 
+export interface YearlyMatrixMonthData {
+  amount: number
+  applicable: boolean
+  status: 'UNGENERATED' | 'UNPAID' | 'PARTIAL' | 'PAID' | 'OVERDUE'
+  invoice_id: number | null
+}
+
+export interface YearlyMatrixItem {
+  category_id: number
+  category_name: string
+  frequency: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY' | 'ONE_TIME'
+  total: number
+  months: Record<string, YearlyMatrixMonthData>
+}
+
+export interface YearlyMatrixResponse {
+  months: string[]
+  items: YearlyMatrixItem[]
+}
+
 // ─── Payment ──────────────────────────────────────────────────────────────────
 export interface FeePaymentModel {
   id: number

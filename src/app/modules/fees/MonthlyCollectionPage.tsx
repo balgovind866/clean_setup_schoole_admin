@@ -1,86 +1,73 @@
-import { FC, useState, useEffect, useCallback, useRef } from 'react'
+import { FC, useState, useEffect, useCallback, useMemo } from 'react'
 import { PageTitle } from '../../../_metronic/layout/core'
 import { ToolbarWrapper } from '../../../_metronic/layout/components/toolbar'
 import { Content } from '../../../_metronic/layout/components/content'
+import clsx from 'clsx'
 import { Modal } from 'react-bootstrap'
 import { useAuth } from '../auth'
-import { collectPayment, getStudentDues } from './core/_requests'
+import { collectPayment, getYearlyMatrix } from './core/_requests'
 import { getAcademicSessions, getClasses, getClassSections } from '../academic/core/_requests'
 import { getEnrollments, getStudentById } from '../students/core/_requests'
-import { FeeInvoiceModel } from './core/_models'
-import { extractArray, extractError } from './core/_utils'
+import { YearlyMatrixResponse, YearlyMatrixItem } from './core/_models'
 import { StudentEnrollmentModel } from '../students/core/_models'
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const ACADEMIC_MONTHS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'] as const
-type MonthName = typeof ACADEMIC_MONTHS[number]
-
-const MONTH_NUM: Record<MonthName, string> = {
-  Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09',
-  Oct: '10', Nov: '11', Dec: '12', Jan: '01', Feb: '02', Mar: '03',
-}
-
-const PAYMENT_MODES = ['Cash', 'Cheque', 'Online', 'UPI', 'DD']
-
-/** Given academic session_year like "2025-26" and a month name, returns "YYYY-MM" */
-function resolveMonthKey(monthName: MonthName, sessionYear: string): string {
-  const parts = sessionYear.split('-')
-  const startYear = parts[0] || String(new Date().getFullYear())
-  const isNextYear = ['Jan', 'Feb', 'Mar'].includes(monthName)
-  const year = isNextYear ? String(Number(startYear) + 1) : startYear
-  return `${year}-${MONTH_NUM[monthName]}`
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-const MonthlyCollectionPage: FC = () => {
+// ─── Main Component ───────────────────────────────────────────────────────────
+const FeeCollectionPage: FC = () => {
   const { currentUser } = useAuth()
   const schoolId = String(currentUser?.schoolId || '')
-  const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
-  // ── Selection state ─────────────────────────────────────────────────────────
-  const [sessions, setSessions] = useState<any[]>([])
-  const [classes, setClasses] = useState<any[]>([])
-  const [classSections, setClassSections] = useState<any[]>([])
+  // ── Filters ──────────────────────────────────────────────────────────────────
+  const [sessions, setSessions]       = useState<any[]>([])
+  const [classes, setClasses]         = useState<any[]>([])
+  const [sections, setSections]       = useState<any[]>([])
   const [enrollments, setEnrollments] = useState<StudentEnrollmentModel[]>([])
 
   const [selSession, setSelSession] = useState('')
-  const [selClass, setSelClass] = useState('')
-  const [selSection, setSelSection] = useState('')        // class_section_id
-  const [selStudent, setSelStudent] = useState('')        // enrollment id → student_id
+  const [selClass, setSelClass]     = useState('')
+  const [selSection, setSelSection] = useState('')
+  const [selStudent, setSelStudent] = useState('')
 
-  const [loadingMeta, setLoadingMeta] = useState(false)
+  const [loadingMeta, setLoadingMeta]     = useState(false)
   const [loadingEnroll, setLoadingEnroll] = useState(false)
+  const [loadingMatrix, setLoadingMatrix] = useState(false)
+  const [matrixError, setMatrixError]     = useState<string | null>(null)
 
-  // ── Student details ─────────────────────────────────────────────────────────
+  // ── Student data ──────────────────────────────────────────────────────────────
   const [studentDetail, setStudentDetail] = useState<any | null>(null)
-  const [enrolDetail, setEnrolDetail] = useState<StudentEnrollmentModel | null>(null)
+  const [enrolDetail, setEnrolDetail]     = useState<StudentEnrollmentModel | null>(null)
+  
+  // ── Matrix Api Data ───────────────────────────────────────────────────────────
+  const [yearlyMatrix, setYearlyMatrix] = useState<YearlyMatrixResponse | null>(null)
+  const [oldBalance, setOldBalance] = useState(0) // Assuming backend might pass this if needed, else 0
 
-  // ── Dues / invoices ─────────────────────────────────────────────────────────
-  const [dues, setDues] = useState<FeeInvoiceModel[]>([])
-  const [loadingDues, setLoadingDues] = useState(false)
-  const [duesError, setDuesError] = useState<string | null>(null)
+  // ── Selection State ────────────────────────────────────────────────────────────
+  // Selected Full Months
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([])
+  
+  // checkedCells: `${categoryId}__${month}` => boolean (For Monthly items)
+  const [checkedCells, setCheckedCells] = useState<Record<string, boolean>>({})
 
-  // ── Month selection ─────────────────────────────────────────────────────────
-  const [selectedMonths, setSelectedMonths] = useState<MonthName[]>([])
+  // selectedAnnualCats: category_id => boolean (For Annual / One-time items)
+  const [selectedAnnualCats, setSelectedAnnualCats] = useState<number[]>([])
 
-  // ── Payment form ────────────────────────────────────────────────────────────
-  const [additionalFee, setAdditionalFee] = useState(0)
-  const [concessionPct, setConcessionPct] = useState(0)
-  const [amountReceived, setAmountReceived] = useState(0)
-  const [paymentMode, setPaymentMode] = useState('Cash')
-  const [bankName, setBankName] = useState('')
-  const [chequeNo, setChequeNo] = useState('')
-  const [chequeDate, setChequeDate] = useState('')
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10))
-  const [remark, setRemark] = useState('')
+  // ── Payment form ───────────────────────────────────────────────────────────────
+  const [additionalFee, setAdditionalFee]   = useState(0)
+  const [concessionPct, setConcessionPct]   = useState(0)
+  const [paymentMode, setPaymentMode]       = useState('Cash')
+  const [bankName, setBankName]             = useState('')
+  const [chequeNo, setChequeNo]             = useState('')
+  const [chequeDate, setChequeDate]         = useState('')
+  const [remark, setRemark]                 = useState('')
+  const [sendSMS, setSendSMS]               = useState(true)
+  const [sendWhatsApp, setSendWhatsApp]     = useState(true)
 
-  // ── Submit state ────────────────────────────────────────────────────────────
-  const [submitting, setSubmitting] = useState(false)
+  // ── Submit state ───────────────────────────────────────────────────────────────
+  const [submitting, setSubmitting]   = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [showSuccess, setShowSuccess] = useState(false)
+  const [showModal, setShowModal]     = useState(false)
   const [lastReceipt, setLastReceipt] = useState<any | null>(null)
 
-  // ── Load meta ───────────────────────────────────────────────────────────────
+  // ─── Load meta ────────────────────────────────────────────────────────────────
   const loadMeta = useCallback(async () => {
     if (!schoolId) return
     setLoadingMeta(true)
@@ -92,7 +79,6 @@ const MonthlyCollectionPage: FC = () => {
       const sess = sRes.data.success ? (sRes.data.data.sessions || []) : []
       setSessions(sess)
       if (cRes.data.success) setClasses(cRes.data.data.classes || [])
-      // Auto-select current session
       const cur = sess.find((s: any) => s.is_current)
       if (cur) setSelSession(String(cur.id))
     } catch { }
@@ -101,763 +87,820 @@ const MonthlyCollectionPage: FC = () => {
 
   useEffect(() => { loadMeta() }, [loadMeta])
 
-  // ── Load class sections ─────────────────────────────────────────────────────
   const handleClassChange = async (classId: string) => {
-    setSelClass(classId)
-    setSelSection('')
-    setSelStudent('')
-    setClassSections([])
-    setEnrollments([])
-    setStudentDetail(null)
-    setEnrolDetail(null)
-    setDues([])
-    setSelectedMonths([])
+    setSelClass(classId); setSelSection(''); setSelStudent('')
+    setSections([]); setEnrollments([])
+    resetAll()
     if (!classId) return
     try {
       const { data } = await getClassSections(schoolId, classId)
-      if (data.success) setClassSections(data.data.sections || [])
+      if (data.success) setSections(data.data.sections || [])
     } catch { }
   }
 
-  // ── Load students in section ────────────────────────────────────────────────
   const handleSectionChange = async (sectionId: string) => {
-    setSelSection(sectionId)
-    setSelStudent('')
+    setSelSection(sectionId); setSelStudent('')
     setEnrollments([])
-    setStudentDetail(null)
-    setEnrolDetail(null)
-    setDues([])
-    setSelectedMonths([])
+    resetAll()
     if (!sectionId || !selSession) return
     setLoadingEnroll(true)
     try {
       const { data } = await getEnrollments(schoolId, {
         class_section_id: Number(sectionId),
         session_id: Number(selSession),
-        status: 'Active',
-        limit: 200,
+        status: 'Active', limit: 200,
       })
       if (data.success) setEnrollments(data.data.enrollments || [])
     } catch { }
     finally { setLoadingEnroll(false) }
   }
 
-  // ── Load selected student details + dues ────────────────────────────────────
   const handleStudentChange = async (enrollId: string) => {
     setSelStudent(enrollId)
-    setStudentDetail(null)
-    setEnrolDetail(null)
-    setDues([])
-    setSelectedMonths([])
-    setAdditionalFee(0)
-    setConcessionPct(0)
-    setAmountReceived(0)
-    setSubmitError(null)
+    resetAll()
     if (!enrollId) return
-
     const enrol = enrollments.find(e => String(e.id) === enrollId)
     if (!enrol) return
     setEnrolDetail(enrol)
-
-    // Load full student profile for parent details
+    
+    setLoadingMatrix(true)
     try {
-      const { data } = await getStudentById(schoolId, enrol.student_id)
-      if (data.success) setStudentDetail(data.data.student)
-    } catch { }
-
-    // Load student dues
-    if (!selSession) return
-    setLoadingDues(true)
-    setDuesError(null)
-    try {
-      const { data } = await getStudentDues(schoolId, enrol.student_id, Number(selSession))
-      if (data.success) setDues(Array.isArray(data.data) ? data.data : [])
+      const [profileRes, matrixRes] = await Promise.all([
+        getStudentById(schoolId, enrol.student_id),
+        getYearlyMatrix(schoolId, enrol.student_id, Number(selSession)),
+      ])
+      if (profileRes.data.success) setStudentDetail(profileRes.data.data.student)
+      if (matrixRes.data.success) {
+        setYearlyMatrix(matrixRes.data.data)
+        // If there is any old balance info in matrixRes, set it here.
+        setOldBalance(0)
+      }
     } catch (e: any) {
-      setDuesError(e.response?.data?.message || 'Failed to load dues')
-    } finally { setLoadingDues(false) }
+      setMatrixError(e.response?.data?.message || 'Failed to load fee matrix')
+    } finally { setLoadingMatrix(false) }
   }
 
-  // ── Invoice map: monthKey → FeeInvoiceModel ─────────────────────────────────
-  const sessionYear = sessions.find(s => String(s.id) === selSession)?.session_year || ''
+  const resetAll = () => {
+    setStudentDetail(null); setEnrolDetail(null); setYearlyMatrix(null)
+    setMatrixError(null); setSelectedMonths([]); setCheckedCells({})
+    setSelectedAnnualCats([])
+    setAdditionalFee(0); setConcessionPct(0)
+    setSubmitError(null); setBankName(''); setChequeNo(''); setChequeDate(''); setRemark('')
+  }
 
-  const invoiceByMonth = dues.reduce((acc, inv) => {
-    // Find which month name matches this invoice_month
-    for (const m of ACADEMIC_MONTHS) {
-      if (resolveMonthKey(m, sessionYear) === inv.invoice_month) {
-        acc[m] = inv; break
+  // ─── Categorize Matrix Items ──────────────────────────────────────────────────
+  const monthlyItems = useMemo((): YearlyMatrixItem[] => {
+    return yearlyMatrix?.items.filter(i => i.frequency === 'MONTHLY') || []
+  }, [yearlyMatrix])
+
+  const annualItems = useMemo((): YearlyMatrixItem[] => {
+    return yearlyMatrix?.items.filter(i => i.frequency === 'ONE_TIME' || i.frequency === 'ANNUALLY') || []
+  }, [yearlyMatrix])
+
+  const MATRIX_MONTHS = yearlyMatrix?.months || []
+
+  // ─── Month Box Helpers (Only for Monthly Items context) ──────────────────────────
+  const getMonthAggregateStatus = (m: string) => {
+    if (!yearlyMatrix) return 'none'
+    // A month is 'paid' if ALL applicable monthly items in that month are PAID.
+    // A month is 'pending' if AT LEAST ONE applicable monthly item is UNGENERATED, UNPAID, PARTIAL.
+    // A month is 'not_applicable' if NO monthly items are applicable for this month.
+    let totalApplicable = 0
+    let paidCount = 0
+
+    for (const item of monthlyItems) {
+      const cell = item.months[m]
+      if (cell && cell.applicable) {
+        totalApplicable++
+        if (cell.status === 'PAID') paidCount++
       }
     }
-    return acc
-  }, {} as Record<MonthName, FeeInvoiceModel>)
-
-  // Only selectable months = those that have an invoice and are not fully paid
-  const isSelectable = (m: MonthName) => {
-    const inv = invoiceByMonth[m]
-    return !!inv && inv.status !== 'PAID'
+    
+    if (totalApplicable === 0) return 'none'
+    if (paidCount === totalApplicable) return 'paid'
+    return 'pending'
   }
 
-  // ── Toggle month ────────────────────────────────────────────────────────────
-  const toggleMonth = (m: MonthName) => {
-    if (!isSelectable(m)) return
-    setSelectedMonths(prev =>
-      prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]
+  const getMonthAggregateBalance = (m: string) => {
+    // How much does this month cost based on the grid?
+    let total = 0
+    if (!yearlyMatrix) return 0
+    for (const item of monthlyItems) {
+      const cell = item.months[m]
+      if (cell && cell.applicable && cell.status !== 'PAID') {
+        // Here we assume cell.amount is the pending amount. 
+        // If the API provides net vs paid, we'd subtract. For now just sum applicable.
+        total += cell.amount
+      }
+    }
+    return total
+  }
+
+  // ─── Interactions ──────────────────────────────────────────────────────────────
+  const toggleMonth = (m: string) => {
+    const status = getMonthAggregateStatus(m)
+    if (status === 'none' || status === 'paid') return
+
+    setSelectedMonths(prev => {
+      if (prev.includes(m)) {
+        // Deselect month: clear all checked monthly cells for this month
+        setCheckedCells(c => {
+          const next = { ...c }
+          monthlyItems.forEach(item => { delete next[`${item.category_id}__${m}`] })
+          return next
+        })
+        return prev.filter(x => x !== m)
+      } else {
+        // Select month: check all applicable AND unpaid monthly cells for this month
+        setCheckedCells(c => {
+          const next = { ...c }
+          monthlyItems.forEach(item => {
+            const cell = item.months[m]
+            if (cell && cell.applicable && cell.status !== 'PAID') {
+              next[`${item.category_id}__${m}`] = true
+            }
+          })
+          return next
+        })
+        return [...prev, m]
+      }
+    })
+  }
+
+  const toggleAllPendingMonths = () => {
+    const pendingMonths = MATRIX_MONTHS.filter(m => getMonthAggregateStatus(m) === 'pending')
+    if (selectedMonths.length === pendingMonths.length) {
+      setSelectedMonths([])
+      setCheckedCells({})
+    } else {
+      setSelectedMonths(pendingMonths)
+      const next: Record<string, boolean> = {}
+      pendingMonths.forEach(m => {
+        monthlyItems.forEach(item => {
+          const cell = item.months[m]
+          if (cell && cell.applicable && cell.status !== 'PAID') {
+            next[`${item.category_id}__${m}`] = true
+          }
+        })
+      })
+      setCheckedCells(next)
+    }
+  }
+
+  const toggleMonthlyCell = (categoryId: number, m: string) => {
+    const item = monthlyItems.find(i => i.category_id === categoryId)
+    const cell = item?.months[m]
+    if (!cell || !cell.applicable || cell.status === 'PAID') return // cannot interact
+
+    const key = `${categoryId}__${m}`
+    setCheckedCells(prev => {
+      const next = { ...prev }
+      if (next[key]) {
+        delete next[key] // uncheck
+        // If no cells remain checked for this month, automatically deselect the month pill
+        const monthStillHasChecked = monthlyItems.some(i => next[`${i.category_id}__${m}`])
+        if (!monthStillHasChecked) setSelectedMonths(p => p.filter(x => x !== m))
+      } else {
+        next[key] = true // check
+        // Ensure month pill is selected
+        if (!selectedMonths.includes(m)) setSelectedMonths(p => [...p, m])
+      }
+      return next
+    })
+  }
+
+  const toggleAnnualCat = (categoryId: number) => {
+    setSelectedAnnualCats(prev => 
+      prev.includes(categoryId) ? prev.filter(x => x !== categoryId) : [...prev, categoryId]
     )
   }
 
-  const toggleSelectAll = () => {
-    const selectable = ACADEMIC_MONTHS.filter(isSelectable)
-    if (selectedMonths.length === selectable.length) setSelectedMonths([])
-    else setSelectedMonths(selectable)
+  // ─── Calculations ─────────────────────────────────────────────────────────────
+  const totals = useMemo(() => {
+    let monthlySubtotal = 0
+    monthlyItems.forEach(item => {
+      MATRIX_MONTHS.forEach(m => {
+        const key = `${item.category_id}__${m}`
+        if (checkedCells[key]) {
+          monthlySubtotal += item.months[m]?.amount || 0
+        }
+      })
+    })
+
+    let annualSubtotal = 0
+    annualItems.forEach(item => {
+      if (selectedAnnualCats.includes(item.category_id)) {
+        annualSubtotal += item.total
+      }
+    })
+
+    const subtotal = monthlySubtotal + annualSubtotal
+    const totalFee = subtotal + additionalFee
+    const concessionAmt = (totalFee * concessionPct) / 100
+    const netFee = Math.max(0, totalFee - concessionAmt)
+    const totalReceivable = netFee + oldBalance
+
+    return { monthlySubtotal, annualSubtotal, subtotal, totalFee, concessionAmt, netFee, totalReceivable }
+  }, [checkedCells, monthlyItems, selectedAnnualCats, annualItems, MATRIX_MONTHS, additionalFee, concessionPct, oldBalance])
+
+  const getMonthTotalComputed = (m: string): number => {
+    let sum = 0
+    monthlyItems.forEach(item => {
+        if (checkedCells[`${item.category_id}__${m}`]) {
+            sum += item.months[m]?.amount || 0
+        }
+    })
+    return sum
   }
 
-  // ── Fee breakdown matrix ────────────────────────────────────────────────────
-  // All unique categories across selected month invoices
-  const selectedInvoices = selectedMonths
-    .map(m => invoiceByMonth[m])
-    .filter(Boolean)
-
-  const allCategoryIds = [...new Set(
-    selectedInvoices.flatMap(inv => inv.items?.map(i => i.fee_category_id) ?? [])
-  )]
-
-  const getCategoryName = (catId: number) => {
-    for (const inv of selectedInvoices) {
-      const item = inv.items?.find(i => i.fee_category_id === catId)
-      if (item?.fee_category?.name) return item.fee_category.name
-    }
-    return `Category #${catId}`
-  }
-
-  const getCatAmountForMonth = (catId: number, month: MonthName): number => {
-    const inv = invoiceByMonth[month]
-    if (!inv) return 0
-    const item = inv.items?.find(i => i.fee_category_id === catId)
-    return item ? Number(item.amount) : 0
-  }
-
-  const getMonthTotal = (month: MonthName): number => {
-    const inv = invoiceByMonth[month]
-    return inv ? Number(inv.net_amount) - Number(inv.paid_amount) : 0
-  }
-
-  // ── Totals ──────────────────────────────────────────────────────────────────
-  const baseFee = selectedInvoices.reduce((s, inv) => s + Number(inv.net_amount) - Number(inv.paid_amount), 0)
-  const concessionAmt = Math.round(baseFee * concessionPct / 100)
-  const netFee = baseFee + additionalFee - concessionAmt
-  const newBalance = netFee - amountReceived
-
-  // ── Submit payment ──────────────────────────────────────────────────────────
+  // ─── Submit ────────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!selStudent || !selSession || selectedMonths.length === 0) {
-      setSubmitError('Please select student and at least one month')
-      return
-    }
-    if (amountReceived <= 0) {
-      setSubmitError('Amount received must be greater than 0')
-      return
-    }
-    setSubmitting(true)
-    setSubmitError(null)
+    if (!enrolDetail || !selSession) return
+    if (totals.totalReceivable <= 0) { setSubmitError('No fee selected.'); return }
+    setSubmitting(true); setSubmitError(null)
+
+    // Build notes summarizing what is being paid
+    const monthStrs = selectedMonths.map(m => m).join(', ')
+    const mNote = monthStrs ? `Months: ${monthStrs}` : ''
+    const aCols = annualItems.filter(i => selectedAnnualCats.includes(i.category_id)).map(i => i.category_name).join(', ')
+    const aNote = aCols ? `Annual/OneTime: ${aCols}` : ''
+
     try {
-      const enrol = enrollments.find(e => String(e.id) === selStudent)
       const { data } = await collectPayment(schoolId, {
-        student_id: enrol!.student_id,
+        student_id: enrolDetail.student_id,
         academic_session_id: Number(selSession),
-        amount: amountReceived,
-        payment_method: paymentMode,
-        payment_date: paymentDate,
-        notes: remark || `Paid for: ${selectedMonths.join(', ')}${chequeNo ? ` | Cheque: ${chequeNo}` : ''}`,
+        amount: totals.totalReceivable,
+        payment_method: paymentMode.toUpperCase(),
+        payment_date: paymentDate || new Date().toISOString().slice(0, 10),
+        notes: [mNote, aNote, chequeNo ? `Cheque: ${chequeNo}` : '', bankName ? `Bank: ${bankName}` : '', remark].filter(Boolean).join(' | '),
       })
       if (data.success) {
         setLastReceipt(data.data)
-        setShowSuccess(true)
-        // Reset
-        setSelectedMonths([])
-        setAdditionalFee(0)
-        setConcessionPct(0)
-        setAmountReceived(0)
-        setPaymentMode('Cash')
-        setBankName('')
-        setChequeNo('')
-        setChequeDate('')
-        setRemark('')
-        // Reload dues
-        if (enrol) {
-          const dRes = await getStudentDues(schoolId, enrol.student_id, Number(selSession))
-          if (dRes.data.success) setDues(Array.isArray(dRes.data.data) ? dRes.data.data : [])
+        setShowModal(true)
+        setSelectedMonths([]); setCheckedCells({}); setSelectedAnnualCats([])
+        setAdditionalFee(0); setConcessionPct(0); setRemark('')
+        setBankName(''); setChequeNo(''); setChequeDate('')
+        
+        // Reload Matrix
+        const matrixRes = await getYearlyMatrix(schoolId, enrolDetail.student_id, Number(selSession))
+        if(matrixRes.data.success) {
+           setYearlyMatrix(matrixRes.data.data)
         }
       }
     } catch (e: any) {
-      setSubmitError(e.response?.data?.message || 'Payment failed')
-    } finally {
-      setSubmitting(false)
-    }
+      setSubmitError(e.response?.data?.message || 'Payment failed. Please try again.')
+    } finally { setSubmitting(false) }
   }
 
-  // ── Derived display ─────────────────────────────────────────────────────────
+  // ─── Display Contexts ──────────────────────────────────────────────────────────
+  const sessionYear = sessions.find(s => String(s.id) === selSession)?.session_year || ''
   const selectedEnrol = enrollments.find(e => String(e.id) === selStudent)
-  const className = selectedEnrol?.class_section?.class?.name || (selClass ? classes.find(c => String(c.id) === selClass)?.name : '')
+  const stName = `${selectedEnrol?.student?.first_name || ''} ${selectedEnrol?.student?.last_name || ''}`.trim().toUpperCase()
+  const className = selectedEnrol?.class_section?.class?.name || ''
   const sectionName = selectedEnrol?.class_section?.section?.name || ''
-  const rollNo = selectedEnrol?.roll_number || ''
-  const fatherName = studentDetail?.parent?.father_name || '—'
-  const motherName = studentDetail?.parent?.mother_name || '—'
-  const fatherPhone = studentDetail?.parent?.father_phone || studentDetail?.mobile_number || '—'
-  const address = studentDetail?.address ? `${studentDetail.address.current_address || ''}, ${studentDetail.address.current_city || ''}`.trim().replace(/^,|,$/, '') : '—'
-
-  const selectableCount = ACADEMIC_MONTHS.filter(isSelectable).length
-  const allSelected = selectableCount > 0 && selectedMonths.length === selectableCount
+  const fatherName = studentDetail?.parent?.father_name?.toUpperCase() || '—'
+  const motherName = studentDetail?.parent?.mother_name?.toUpperCase() || '—'
+  const mobile = studentDetail?.mobile_number || studentDetail?.parent?.father_phone || '—'
+  const address = studentDetail?.address
+    ? [studentDetail.address.current_address, studentDetail.address.current_city].filter(Boolean).join(', ')
+    : '—'
+  const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  
+  const pendingCount = MATRIX_MONTHS.filter(m => getMonthAggregateStatus(m) === 'pending').length
+  const allPendingSelected = pendingCount > 0 && selectedMonths.length === pendingCount
+  const tableCols = MATRIX_MONTHS.filter(m => selectedMonths.includes(m)) // Display only selected months in table
 
   return (
     <>
       <ToolbarWrapper />
       <Content>
-
-        {/* ── TOP SELECTOR BAR ── */}
-        <div className='card card-flush mb-5' style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%)' }}>
-          <div className='card-body py-5'>
-            <div className='row g-4 align-items-center'>
-              <div className='col-auto'>
-                <div className='d-flex align-items-center gap-2'>
-                  <div className='symbol symbol-45px rounded-circle' style={{ background: 'rgba(255,255,255,0.15)' }}>
-                    <div className='symbol-label d-flex align-items-center justify-content-center'>
-                      <i className='ki-duotone ki-wallet fs-2 text-white'><span className='path1' /><span className='path2' /><span className='path3' /></i>
-                    </div>
-                  </div>
-                  <div>
-                    <div className='text-white fw-bolder fs-4'>Monthly Fee Collection</div>
-                    <div className='text-white opacity-75 fs-8'>Select class → section → student to collect fees</div>
-                  </div>
-                </div>
+        {/* ─── SEARCH BAR ─────────────────────────────────────────────────────────── */}
+        <div className='card card-flush shadow-xs mb-6 border-0'>
+          <div className='card-body py-4'>
+            <div className='row g-3 align-items-end'>
+              <div className='col-lg-3 col-md-6'>
+                <label className='fw-bold fs-8 text-uppercase text-muted mb-1 d-block'>Session</label>
+                <select className='form-select form-select-sm form-select-solid'
+                  value={selSession}
+                  onChange={e => { setSelSession(e.target.value); setSelClass(''); setSelSection(''); setSelStudent(''); resetAll() }}>
+                  <option value=''>Select session...</option>
+                  {sessions.map(s => <option key={s.id} value={s.id}>{s.session_year}{s.is_current ? ' ★' : ''}</option>)}
+                </select>
+              </div>
+              <div className='col-lg-2 col-md-3'>
+                <label className='fw-bold fs-8 text-uppercase text-muted mb-1 d-block'>Class</label>
+                <select className='form-select form-select-sm form-select-solid'
+                  value={selClass} onChange={e => handleClassChange(e.target.value)} disabled={!selSession}>
+                  <option value=''>Select class...</option>
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className='col-lg-2 col-md-3'>
+                <label className='fw-bold fs-8 text-uppercase text-muted mb-1 d-block'>Section</label>
+                <select className='form-select form-select-sm form-select-solid'
+                  value={selSection} onChange={e => handleSectionChange(e.target.value)} disabled={!selClass}>
+                  <option value=''>Select section...</option>
+                  {sections.map(cs => <option key={cs.id} value={cs.id}>{cs.section?.name}</option>)}
+                </select>
               </div>
               <div className='col'>
-                <div className='row g-3 justify-content-end align-items-end'>
-                  {/* Session */}
-                  <div className='col-lg-3 col-md-4'>
-                    <label className='text-white opacity-75 fw-semibold fs-8 mb-1'>Academic Session</label>
-                    <select className='form-select form-select-sm border-0' style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
-                      value={selSession} onChange={e => { setSelSession(e.target.value); setSelClass(''); setSelSection(''); setSelStudent(''); setDues([]); setSelectedMonths([]) }}>
-                      <option value=''>Select session...</option>
-                      {sessions.map(s => <option key={s.id} value={s.id} style={{ color: '#333' }}>{s.session_year} {s.is_current ? '★' : ''}</option>)}
-                    </select>
-                  </div>
-                  {/* Class */}
-                  <div className='col-lg-2 col-md-3'>
-                    <label className='text-white opacity-75 fw-semibold fs-8 mb-1'>Class</label>
-                    <select className='form-select form-select-sm border-0' style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
-                      value={selClass} onChange={e => handleClassChange(e.target.value)} disabled={!selSession}>
-                      <option value=''>Select class...</option>
-                      {classes.map(c => <option key={c.id} value={c.id} style={{ color: '#333' }}>{c.name}</option>)}
-                    </select>
-                  </div>
-                  {/* Section */}
-                  <div className='col-lg-2 col-md-3'>
-                    <label className='text-white opacity-75 fw-semibold fs-8 mb-1'>Section</label>
-                    <select className='form-select form-select-sm border-0' style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
-                      value={selSection} onChange={e => handleSectionChange(e.target.value)} disabled={!selClass}>
-                      <option value=''>Select section...</option>
-                      {classSections.map(cs => <option key={cs.id} value={cs.id} style={{ color: '#333' }}>Section {cs.section?.name}</option>)}
-                    </select>
-                  </div>
-                  {/* Student */}
-                  <div className='col-lg-3 col-md-4'>
-                    <label className='text-white opacity-75 fw-semibold fs-8 mb-1'>Student</label>
-                    <select className='form-select form-select-sm border-0' style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
-                      value={selStudent} onChange={e => handleStudentChange(e.target.value)} disabled={!selSection || loadingEnroll}>
-                      <option value=''>{loadingEnroll ? 'Loading students...' : 'Select student...'}</option>
-                      {enrollments.map(e => (
-                        <option key={e.id} value={e.id} style={{ color: '#333' }}>
-                          {e.roll_number ? `[${e.roll_number}] ` : ''}{e.student?.first_name} {e.student?.last_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                <label className='fw-bold fs-8 text-uppercase text-muted mb-1 d-block'>Student</label>
+                <select className='form-select form-select-sm form-select-solid'
+                  value={selStudent} onChange={e => handleStudentChange(e.target.value)} disabled={!selSection || loadingEnroll}>
+                  <option value=''>{loadingEnroll ? 'Loading students...' : 'Select student...'}</option>
+                  {enrollments.map(e => (
+                    <option key={e.id} value={e.id}>
+                      {e.roll_number ? `[${e.roll_number}] ` : ''}{e.student?.first_name} {e.student?.last_name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ── STUDENT INFORMATION CARD ── */}
-        {selStudent && selectedEnrol && (
-          <div className='card card-flush mb-5 border border-primary border-dashed'>
-            <div className='card-body py-4'>
-              <div className='row g-4'>
-                {/* Date */}
-                <div className='col-auto'>
-                  <div className='d-flex flex-column align-items-center justify-content-center rounded px-4 py-3'
-                    style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)', minWidth: 100 }}>
-                    <span className='text-white fw-bolder fs-5'>{today}</span>
-                  </div>
-                </div>
-                {/* Info Grid */}
-                <div className='col'>
-                  <div className='row g-2'>
-                    <div className='col-md-2 col-sm-4'>
-                      <div className='bg-light rounded px-3 py-2'>
-                        <div className='text-muted fs-9 fw-semibold mb-1'>Class (Sec.)</div>
-                        <div className='fw-bold text-primary fs-7'>{className} {sectionName ? `(${sectionName})` : ''}</div>
-                      </div>
-                    </div>
-                    <div className='col-md-2 col-sm-4'>
-                      <div className='bg-light rounded px-3 py-2'>
-                        <div className='text-muted fs-9 fw-semibold mb-1'>Roll No.</div>
-                        <div className='fw-bold text-danger fs-7'>{rollNo || '—'}</div>
-                      </div>
-                    </div>
-                    <div className='col-md-2 col-sm-4'>
-                      <div className='bg-light rounded px-3 py-2'>
-                        <div className='text-muted fs-9 fw-semibold mb-1'>Student ID</div>
-                        <div className='fw-bold text-danger fs-7'>{selectedEnrol.student_id}</div>
-                      </div>
-                    </div>
-                    <div className='col-md-4 col-sm-6'>
-                      <div className='bg-light rounded px-3 py-2'>
-                        <div className='text-muted fs-9 fw-semibold mb-1'>Name</div>
-                        <div className='fw-bold text-gray-800 fs-6'>
-                          {selectedEnrol.student?.first_name} {selectedEnrol.student?.last_name}
-                        </div>
-                      </div>
-                    </div>
-                    <div className='col-md-2 col-sm-6'>
-                      <div className='bg-light rounded px-3 py-2'>
-                        <div className='text-muted fs-9 fw-semibold mb-1'>Session</div>
-                        <div className='fw-bold text-gray-800 fs-7'>{sessionYear}</div>
-                      </div>
-                    </div>
-
-                    <div className='col-md-3 col-sm-6'>
-                      <div className='bg-light rounded px-3 py-2'>
-                        <div className='text-muted fs-9 fw-semibold mb-1'>Father</div>
-                        <div className='fw-semibold text-gray-700 fs-7'>{fatherName}</div>
-                      </div>
-                    </div>
-                    <div className='col-md-3 col-sm-6'>
-                      <div className='bg-light rounded px-3 py-2'>
-                        <div className='text-muted fs-9 fw-semibold mb-1'>Mother</div>
-                        <div className='fw-semibold text-gray-700 fs-7'>{motherName}</div>
-                      </div>
-                    </div>
-                    <div className='col-md-3 col-sm-6'>
-                      <div className='bg-light rounded px-3 py-2'>
-                        <div className='text-muted fs-9 fw-semibold mb-1'>Mobile</div>
-                        <div className='fw-semibold text-gray-700 fs-7'>{fatherPhone}</div>
-                      </div>
-                    </div>
-                    <div className='col-md-3 col-sm-6'>
-                      <div className='bg-light rounded px-3 py-2'>
-                        <div className='text-muted fs-9 fw-semibold mb-1'>Old Balance</div>
-                        <div className='fw-bold fs-6' style={{ color: dues.some(d => d.status !== 'PAID') ? '#dc2626' : '#16a34a' }}>
-                          ₹{dues.filter(d => d.status !== 'PAID').reduce((s, d) => s + Number(d.net_amount) - Number(d.paid_amount), 0).toLocaleString('en-IN')}
-                        </div>
-                      </div>
-                    </div>
-                    {address !== '—' && (
-                      <div className='col-12'>
-                        <div className='bg-light rounded px-3 py-2'>
-                          <div className='text-muted fs-9 fw-semibold mb-1'>Address</div>
-                          <div className='fw-semibold text-gray-700 fs-7'>{address}</div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+        {/* ─── EMPTY STATE ─────────────────────────────────────────────────────────── */}
+        {!selStudent && !loadingMatrix && (
+          <div className='card card-flush border-0 shadow-xs'>
+            <div className='card-body py-20 text-center'>
+              <i className='bi bi-person-check text-gray-300' style={{ fontSize: '5rem' }}></i>
+              <h5 className='fw-bold text-gray-600 mt-4 mb-1'>Select a Student</h5>
+              <p className='text-muted fs-7'>Search and pick a student to view their Yearly Matrix fees.</p>
             </div>
           </div>
         )}
 
-        {/* ── LOADING DUES ── */}
-        {loadingDues && (
-          <div className='card card-flush mb-5'>
-            <div className='card-body text-center py-8'>
-              <span className='spinner-border spinner-border-lg text-primary me-3' />
-              <span className='text-muted fs-5'>Loading fee details for this student...</span>
+        {/* ─── LOADING ──────────────────────────────────────────────────────────────── */}
+        {loadingMatrix && (
+          <div className='card card-flush border-0 shadow-xs'>
+            <div className='card-body py-16 text-center'>
+              <div className='spinner-border text-primary mb-3'></div>
+              <div className='text-muted fw-semibold'>Loading fee matrix...</div>
             </div>
           </div>
         )}
-        {duesError && <div className='alert alert-danger mb-5'>{duesError}</div>}
 
-        {/* ── MONTH SELECTOR ── */}
-        {selStudent && !loadingDues && (
-          <div className='card card-flush mb-5'>
-            <div className='card-body py-5'>
-              <div className='d-flex align-items-center gap-3 mb-4'>
-                <h5 className='fw-bold mb-0 text-gray-800'>
-                  <i className='ki-duotone ki-calendar fs-2 text-primary me-2'><span className='path1' /><span className='path2' /></i>
-                  Select Months
-                </h5>
-                <span className='badge badge-light-primary'>{selectedMonths.length} selected</span>
-                {dues.length === 0 && (
-                  <span className='badge badge-light-success ms-auto'>No pending dues — all paid! 🎉</span>
-                )}
+        {matrixError && <div className='alert alert-danger fw-semibold mb-4'>{matrixError}</div>}
+
+        {/* ─── MAIN UI CARD ────────────────────────────────────────────────────────── */}
+        {selStudent && yearlyMatrix && !loadingMatrix && (
+          <div className='card card-flush border-0 shadow-sm overflow-hidden'>
+
+            {/* Header Gradient */}
+            <div className='card-header min-h-70px' style={{ background: 'linear-gradient(135deg, #3b4cca 0%, #7b2ff7 100%)' }}>
+              <div className='card-title'>
+                <div className='d-flex align-items-center gap-3'>
+                  <i className='bi bi-receipt text-white fs-2'></i>
+                  <h2 className='text-white fw-bolder mb-0 fs-4'>Fee Receipt — {stName || 'Student'}</h2>
+                </div>
+              </div>
+              <div className='card-toolbar'>
+                <span className='badge fw-bold px-4 py-2 fs-8' style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.35)', borderRadius: 20 }}>
+                  Session: {sessionYear}
+                </span>
+              </div>
+            </div>
+
+            <div className='card-body px-8 py-7'>
+
+              {/* ── 1. Student Master Info Grid ── */}
+              <div className='rounded-2 border border-gray-200 mb-7' style={{ background: '#f8f9fb' }}>
+                <div className='row g-0 border-bottom border-gray-200'>
+                  {[
+                    { label: 'Date', value: <span className='badge badge-primary px-3 py-2 fw-bold fs-8'>{today}</span> },
+                    { label: 'Class (Sec.)', value: `${className}${sectionName ? ` (${sectionName})` : ''}` },
+                    { label: 'Reg.', value: enrolDetail?.student_id },
+                    { label: 'SID', value: enrolDetail?.student_id },
+                    { label: 'Roll No.', value: enrolDetail?.roll_number || '—' },
+                  ].map(({ label, value }) => (
+                    <div key={label} className='col py-4 px-5 border-end border-gray-200'>
+                      <div className='text-muted fw-bold fs-9 text-uppercase mb-2'>{label}</div>
+                      <div className='fw-bolder text-gray-800 fs-7'>{value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className='row g-0 border-bottom border-gray-200'>
+                  {[
+                    { label: 'Name', value: stName },
+                    { label: 'Father', value: fatherName },
+                    { label: 'Mother', value: motherName },
+                  ].map(({ label, value }) => (
+                    <div key={label} className='col-4 py-4 px-5 border-end border-gray-200'>
+                      <div className='text-muted fw-bold fs-9 text-uppercase mb-2'>{label}</div>
+                      <div className='fw-bolder text-gray-800 fs-7'>{value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className='row g-0 border-bottom border-gray-200'>
+                  {[
+                    { label: 'Route', value: '—' },
+                    { label: 'Mobile', value: mobile },
+                    {
+                      label: 'Old Balance',
+                      value: <span className={clsx('fw-bolder fs-6', oldBalance > 0 ? 'text-danger' : 'text-success')}>
+                        ₹{oldBalance.toLocaleString('en-IN')}
+                      </span>
+                    },
+                  ].map(({ label, value }) => (
+                    <div key={label} className='col-4 py-4 px-5 border-end border-gray-200'>
+                      <div className='text-muted fw-bold fs-9 text-uppercase mb-2'>{label}</div>
+                      <div className='fw-bold text-gray-800 fs-7'>{value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className='py-4 px-5'>
+                  <div className='text-muted fw-bold fs-9 text-uppercase mb-2'>Address</div>
+                  <div className='fw-semibold text-gray-700 fs-7'>{address}</div>
+                </div>
               </div>
 
-              {/* Month Checkboxes */}
-              <div className='d-flex flex-wrap gap-2 mb-3'>
-                {ACADEMIC_MONTHS.map(m => {
-                  const inv = invoiceByMonth[m]
-                  const selectable = isSelectable(m)
-                  const isPaid = inv?.status === 'PAID'
-                  const isSelected = selectedMonths.includes(m)
-                  const isPartial = inv?.status === 'PARTIAL'
-                  const hasInvoice = !!inv
-
-                  return (
-                    <label
-                      key={m}
-                      onClick={() => toggleMonth(m)}
-                      className='position-relative'
-                      style={{ cursor: selectable ? 'pointer' : 'default' }}
+              {/* ── 2. Month Pill Selection ── */}
+              <div className='mb-6'>
+                <div className='d-flex align-items-center justify-content-between mb-4'>
+                  <div className='d-flex align-items-center gap-2'>
+                    <span className='fs-4'>📅</span>
+                    <span className='fw-bolder text-gray-800 fs-6'>Select Months</span>
+                  </div>
+                  {pendingCount > 0 && (
+                    <button
+                      className={clsx('btn btn-sm rounded-pill fw-bold px-5', allPendingSelected ? 'btn-primary' : 'btn-light-primary')}
+                      onClick={toggleAllPendingMonths}
                     >
-                      <input type='checkbox' className='d-none' checked={isSelected} readOnly />
-                      <div className={`d-flex flex-column align-items-center justify-content-center rounded-2 px-3 py-2 fw-bold fs-7 transition
-                        ${isSelected ? 'text-white' : isPaid ? 'text-success' : selectable ? 'text-gray-700' : 'text-gray-400'}
-                      `}
-                        style={{
-                          minWidth: 58,
-                          border: '2px solid',
-                          borderColor: isSelected ? '#2563eb' : isPaid ? '#16a34a' : isPartial ? '#f59e0b' : hasInvoice ? '#94a3b8' : '#e2e8f0',
-                          background: isSelected ? 'linear-gradient(135deg, #2563eb, #7c3aed)' : isPaid ? '#f0fdf4' : isPartial ? '#fffbeb' : hasInvoice ? '#f8fafc' : '#f1f5f9',
-                          transition: 'all 0.15s',
-                        }}>
-                        {m}
-                        {isPaid && <i className='ki-duotone ki-check-circle fs-8 text-success mt-1'><span className='path1' /><span className='path2' /></i>}
-                        {isPartial && <span className='badge badge-warning fs-9 mt-1 px-1 py-0'>P</span>}
-                        {hasInvoice && !isPaid && !isPartial && (
-                          <span className='fs-9 mt-1' style={{ color: '#2563eb' }}>₹{getMonthTotal(m).toLocaleString('en-IN')}</span>
+                      {allPendingSelected ? '✓ Selected All' : '✓ Select All'}
+                    </button>
+                  )}
+                </div>
+                
+                <div className='d-flex flex-wrap gap-2'>
+                  {MATRIX_MONTHS.map(m => {
+                    const status = getMonthAggregateStatus(m)
+                    const isSelected = selectedMonths.includes(m)
+                    const isPaid = status === 'paid'
+                    const isApplicable = status !== 'none'
+                    
+                    return (
+                      <button
+                        key={m}
+                        className={clsx(
+                          'btn btn-sm rounded-pill fw-bold px-4 py-2 fs-8 border',
+                          isPaid ? 'btn-light-success text-success border-success' :
+                          isSelected ? 'btn-primary border-primary text-white' :
+                          isApplicable ? 'btn-light border-gray-300 text-gray-600' :
+                          'btn-light border-gray-200 text-gray-400 opacity-50'
                         )}
-                      </div>
-                    </label>
-                  )
-                })}
+                        style={{ minWidth: 60, cursor: (isPaid || !isApplicable) ? 'not-allowed' : 'pointer', transition: 'all 0.15s' }}
+                        onClick={() => toggleMonth(m)}
+                        disabled={isPaid || !isApplicable}
+                        title={isPaid ? 'Paid' : !isApplicable ? 'Not Applicable' : `₹${getMonthAggregateBalance(m)} pending`}
+                      >
+                        {isPaid ? '✓ ' : ''}{m}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
-              {/* Select All */}
-              {selectableCount > 0 && (
-                <div className='d-flex align-items-center gap-3 mt-2'>
-                  <label className='d-flex align-items-center gap-2 cursor-pointer'>
-                    <input type='checkbox' className='form-check-input mt-0' checked={allSelected}
-                      onChange={toggleSelectAll} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-                    <span className='fw-semibold fs-7 text-gray-700'>Select All Pending ({selectableCount} months)</span>
-                  </label>
-                  <span className='text-muted fs-8 ms-auto'>
-                    <span className='badge badge-light-success me-1'><i className='ki-duotone ki-check-circle fs-7 text-success me-1'><span className='path1' /><span className='path2' /></i>Paid</span>
-                    <span className='badge badge-light-warning me-1'>P = Partially Paid</span>
-                    <span className='badge badge-light-primary'>Amount shows balance due</span>
-                  </span>
+              {/* ── 3. Table Fee Details (Monthly + Annual inline) ── */}
+              <div className='mb-7'>
+                <div className='d-flex align-items-center gap-2 mb-4'>
+                  <span className='fs-4'>📋</span>
+                  <span className='fw-bolder text-gray-800 fs-6'>Fee Details</span>
+                </div>
+                <div className='table-responsive border rounded-2' style={{borderColor: '#e5e7eb'}}>
+                  <table className='table table-row-bordered table-row-gray-200 align-middle fs-8 mb-0 w-100'>
+                    <thead>
+                      <tr className='text-uppercase text-muted fw-bold' style={{ background: '#f5f7fa', borderBottom: '2px solid #e5e7eb' }}>
+                        <th className='ps-4 py-4 text-nowrap'>Item</th>
+                        {tableCols.map(m => (
+                          <th key={m} className='text-center py-4 px-2' style={{ minWidth: 80 }}>{m.toUpperCase()}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      
+                      {/* === Annual / One Time Items === */}
+                      {annualItems.length > 0 && (
+                        <>
+                           <tr><td colSpan={tableCols.length + 1} className='bg-light-warning py-3 ps-4'>
+                              <div className='fw-bold text-gray-800 fs-8 d-flex align-items-center gap-2'>
+                                <i className="bi bi-star-fill text-warning fs-9"></i>
+                                ANNUAL / ONE TIME FEES
+                              </div>
+                           </td></tr>
+                           { वार्षिकRowRender(annualItems, MATRIX_MONTHS, selectedAnnualCats, toggleAnnualCat) }
+                        </>
+                      )}
+
+                      {/* === Monthly Items === */}
+                      {monthlyItems.length > 0 && tableCols.length > 0 && (
+                        <>
+                           <tr><td colSpan={tableCols.length + 1} className='bg-light-primary py-3 ps-4'>
+                              <div className='fw-bold text-gray-800 fs-8 d-flex align-items-center gap-2'>
+                                <i className="bi bi-calendar3 text-primary fs-9"></i>
+                                MONTHLY FEES
+                              </div>
+                           </td></tr>
+                           { मासिकRowRender(monthlyItems, tableCols, checkedCells, toggleMonthlyCell) }
+                        </>
+                      )}
+
+                      {monthlyItems.length === 0 && annualItems.length === 0 && (
+                         <tr><td colSpan={tableCols.length + 1} className='text-center text-muted py-6'>No fee structure mapped for this session.</td></tr>
+                      )}
+                      
+                    </tbody>
+                    
+                    {/* === Footer Total === */}
+                    <tfoot>
+                      <tr style={{ background: 'linear-gradient(135deg, #3b4cca 0%, #7b2ff7 100%)' }}>
+                        <td className='ps-4 py-4 text-white fw-bolder fs-7 d-flex justify-content-between align-items-center border-0'>
+                          Monthly Total
+                        </td>
+                        {tableCols.map(m => {
+                          const colTotal = getMonthTotalComputed(m)
+                          return (
+                            <td key={m} className='text-center py-4 border-0'>
+                              <span className='badge fw-bolder fs-8 px-3 py-2' style={{ background: 'rgba(255,255,255,0.2)', color: '#fff' }}>
+                                ₹{colTotal.toLocaleString('en-IN')}
+                              </span>
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {/* ── 4. Forms & Summary Cards ── */}
+              { (selectedMonths.length > 0 || selectedAnnualCats.length > 0) && (
+                <div className='row g-6 mb-7'>
+                  {/* Left: Payment Summary (Inputs) */}
+                  <div className='col-md-6'>
+                    <div className='card border h-100 shadow-sm' style={{borderColor: '#bfdbfe'}}>
+                      <div className='card-header min-h-50px border-0 pt-4'>
+                        <h3 className='card-title fw-bolder text-gray-800 fs-6 d-flex align-items-center gap-2'>
+                          <i className='bi bi-calculator text-primary'></i> Payment Summary
+                        </h3>
+                      </div>
+                      <div className='card-body pt-0 pb-4 px-6'>
+                        <div className='d-flex flex-column gap-4'>
+                          <div className='d-flex justify-content-between align-items-center'>
+                            <span className='text-gray-600 fw-bold fs-7'>Total Fee Matrix Amount</span>
+                            <input readOnly className='form-control form-control-sm w-150px text-end fw-bold bg-light' value={totals.subtotal} />
+                          </div>
+                          <div className='d-flex justify-content-between align-items-center'>
+                            <span className='text-gray-600 fw-bold fs-7'>Additional / Fine (₹)</span>
+                            <input type='number' min='0' className='form-control form-control-sm w-150px text-end fw-bold border'
+                              value={additionalFee || ''} onChange={e => setAdditionalFee(Number(e.target.value))} placeholder='0' />
+                          </div>
+                          <div className='d-flex justify-content-between align-items-center'>
+                            <span className='text-gray-600 fw-bold fs-7'>Concession (%)</span>
+                            <input type='number' min='0' max='100' className='form-control form-control-sm w-150px text-end fw-bold border'
+                              value={concessionPct || ''} onChange={e => setConcessionPct(Math.min(100, Number(e.target.value)))} placeholder='0' />
+                          </div>
+                          <div className='d-flex justify-content-between align-items-center'>
+                            <span className='text-gray-600 fw-bold fs-7'>Concession Amt</span>
+                            <input readOnly className='form-control form-control-sm w-150px text-end fw-bold bg-light text-success' value={`-${totals.concessionAmt.toFixed(2)}`} />
+                          </div>
+                          <div className='separator my-1'></div>
+                          <div className='d-flex justify-content-between align-items-center'>
+                            <span className='text-gray-900 fw-bolder fs-6'>Net Fee</span>
+                            <span className='text-primary fw-bolder fs-4 bg-light-primary rounded px-3 py-1'>₹{totals.netFee.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Amount Receivable Stats */}
+                  <div className='col-md-6'>
+                    <div className='card border h-100 shadow-sm' style={{borderColor: '#bbf7d0'}}>
+                      <div className='card-header min-h-50px border-0 pt-4'>
+                        <h3 className='card-title fw-bolder text-gray-800 fs-6 d-flex align-items-center gap-2'>
+                          <i className='bi bi-cash-stack text-success'></i> Amount Receivable
+                        </h3>
+                      </div>
+                      <div className='card-body pt-0 pb-4 px-6 d-flex flex-column gap-3'>
+                        <div className='d-flex flex-stack rounded px-4 py-3 border border-success border-opacity-25' style={{ background: '#f0fff4' }}>
+                          <span className='text-gray-700 fw-semibold fs-7'>Net Fee</span>
+                          <span className='text-success fw-bolder fs-6'>₹{totals.netFee.toFixed(2)}</span>
+                        </div>
+                        <div className='d-flex flex-stack rounded px-4 py-3 border border-warning border-opacity-25' style={{ background: '#fffaf0' }}>
+                          <span className='text-gray-700 fw-semibold fs-7'>Old Balance</span>
+                          <span className='text-warning fw-bolder fs-6'>₹{oldBalance.toFixed(2)}</span>
+                        </div>
+                        
+                        <div className='d-flex flex-stack rounded px-5 py-4 mt-2' style={{ background: '#16a34a' }}>
+                          <span className='text-white fw-bolder fs-6'>Amount Received</span>
+                          <span className='text-white fw-bolder fs-2'>₹{totals.totalReceivable.toFixed(2)}</span>
+                        </div>
+                        
+                        <div className='d-flex flex-stack rounded px-5 py-4' style={{ background: '#dc2626' }}>
+                          <span className='text-white fw-bolder fs-6'>New Balance</span>
+                          <span className='text-white fw-bolder fs-4'>₹0.00</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
-            </div>
-          </div>
-        )}
 
-        {/* ── FEE BREAKDOWN MATRIX ── */}
-        {selectedMonths.length > 0 && (
-          <div className='card card-flush mb-5'>
-            <div className='card-header border-0 pt-5 pb-0'>
-              <h5 className='card-title fw-bold text-gray-800'>
-                <i className='ki-duotone ki-bill fs-2 text-info me-2'><span className='path1' /><span className='path2' /></i>
-                Fee Breakdown
-              </h5>
-            </div>
-            <div className='card-body pt-3'>
-              <div className='table-responsive'>
-                <table className='table align-middle table-bordered fs-7 mb-0'>
-                  <thead>
-                    <tr style={{ background: '#1e3a5f', color: '#fff' }}>
-                      <th className='fw-bold px-4 py-3' style={{ minWidth: 180 }}>ITEM</th>
-                      {selectedMonths.map(m => (
-                        <th key={m} className='text-center fw-bold px-3 py-3' style={{ minWidth: 110 }}>
-                          {m}{sessionYear ? ` '${resolveMonthKey(m, sessionYear).slice(2, 4)}` : ''}
-                        </th>
-                      ))}
-                      <th className='text-end fw-bold px-4 py-3' style={{ minWidth: 110, color: '#fbbf24' }}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allCategoryIds.length === 0 ? (
-                      <tr>
-                        <td colSpan={selectedMonths.length + 2} className='text-center py-6 text-muted'>
-                          No fee breakdown items available
-                        </td>
-                      </tr>
-                    ) : (
-                      allCategoryIds.map(catId => {
-                        const rowTotal = selectedMonths.reduce((s, m) => s + getCatAmountForMonth(catId, m), 0)
-                        return (
-                          <tr key={catId} className='border-bottom border-gray-200'>
-                            <td className='px-4 py-3 fw-semibold text-gray-800'>{getCategoryName(catId)}</td>
-                            {selectedMonths.map(m => {
-                              const amt = getCatAmountForMonth(catId, m)
-                              return (
-                                <td key={m} className='text-center py-3 text-gray-700'>
-                                  {amt > 0 ? `₹${amt.toLocaleString('en-IN')}` : '—'}
-                                </td>
-                              )
-                            })}
-                            <td className='text-end px-4 py-3 fw-bold text-primary'>
-                              ₹{rowTotal.toLocaleString('en-IN')}
-                            </td>
-                          </tr>
-                        )
-                      })
-                    )}
-
-                    {/* Month Totals Row */}
-                    <tr style={{ background: '#f0f7ff' }}>
-                      <td className='px-4 py-3 fw-bolder text-gray-800'>Month Total</td>
-                      {selectedMonths.map(m => (
-                        <td key={m} className='text-center py-3 fw-bold text-primary'>
-                          ₹{getMonthTotal(m).toLocaleString('en-IN')}
-                        </td>
-                      ))}
-                      <td className='text-end px-4 py-3 fw-bolder fs-5' style={{ color: '#2563eb' }}>
-                        ₹{baseFee.toLocaleString('en-IN')}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── PAYMENT FORM ── */}
-        {selStudent && !loadingDues && (
-          <div className='card card-flush'>
-            <div className='card-body py-0'>
-
-              {/* ─ Summary Bar ── */}
-              <div className='row g-0 border-bottom border-gray-200'>
-                {[
-                  { label: 'Total Fee', value: baseFee, editable: false, color: '#1e3a5f' },
-                  { label: 'Additional Fee', value: additionalFee, editable: true, color: '#0891b2', onChg: (v: number) => setAdditionalFee(v) },
-                  { label: 'Concession (%)', value: concessionPct, editable: true, color: '#7c3aed', onChg: (v: number) => setConcessionPct(Math.min(100, Math.max(0, v))) },
-                  { label: 'Concession Amt', value: concessionAmt, editable: false, color: '#059669' },
-                  { label: 'Net Fee', value: netFee, editable: false, color: '#1e3a5f' },
-                ].map(({ label, value, editable, color, onChg }) => (
-                  <div key={label} className='col d-flex flex-column align-items-center justify-content-center py-4 border-end border-gray-200'>
-                    <div className='fw-semibold text-muted fs-8 mb-2 text-center'>{label}</div>
-                    {editable ? (
-                      <input
-                        type='number' min='0'
-                        value={value}
-                        onChange={e => onChg?.(Number(e.target.value))}
-                        className='form-control form-control-sm text-center fw-bold border-0 bg-light rounded'
-                        style={{ maxWidth: 100, color, fontSize: 15 }}
-                      />
-                    ) : (
-                      <div className='fw-bolder fs-5 text-center' style={{ color }}>
-                        {label === 'Concession (%)' ? `${value}%` : `₹${value.toLocaleString('en-IN')}`}
+              {/* ── 5. Payment Details Checkout ── */}
+              { (selectedMonths.length > 0 || selectedAnnualCats.length > 0) && (
+                 <div className='card border border-gray-200 mb-6 shadow-sm'>
+                  <div className='card-body p-6'>
+                    <div className='d-flex align-items-center gap-2 mb-5'>
+                      <i className='bi bi-credit-card-2-front text-dark fs-4'></i>
+                      <h5 className='fw-bolder text-gray-900 mb-0'>Payment Details</h5>
+                    </div>
+                    <div className='row g-5'>
+                      <div className='col-md-3'>
+                        <label className='fw-bold fs-8 text-uppercase text-muted mb-2 d-block'>Payment Mode</label>
+                        <select className='form-select form-select-solid fw-bold text-gray-800' value={paymentMode} onChange={e => setPaymentMode(e.target.value)}>
+                          <option>Cash</option>
+                          <option>Cheque</option>
+                          <option>Online</option>
+                          <option>UPI</option>
+                          <option>DD</option>
+                        </select>
                       </div>
-                    )}
+                      <div className='col-md-3'>
+                        <label className='fw-bold fs-8 text-uppercase text-muted mb-2 d-block'>Bank Name</label>
+                        <input type='text' className='form-control form-control-solid' value={bankName} onChange={e => setBankName(e.target.value)} placeholder='Bank name' disabled={paymentMode==='Cash'} />
+                      </div>
+                      <div className='col-md-3'>
+                        <label className='fw-bold fs-8 text-uppercase text-muted mb-2 d-block'>Cheque / DD No.</label>
+                        <input type='text' className='form-control form-control-solid' value={chequeNo} onChange={e => setChequeNo(e.target.value)} placeholder='Cheque number' disabled={paymentMode==='Cash'} />
+                      </div>
+                      <div className='col-md-3'>
+                        <label className='fw-bold fs-8 text-uppercase text-muted mb-2 d-block'>Cheque Date</label>
+                        <input type='date' className='form-control form-control-solid' value={chequeDate} onChange={e => setChequeDate(e.target.value)} disabled={paymentMode==='Cash'} />
+                      </div>
+                      <div className='col-12'>
+                        <label className='fw-bold fs-8 text-uppercase text-muted mb-2 d-block'>Remark</label>
+                        <textarea className='form-control form-control-solid' rows={2} value={remark} onChange={e => setRemark(e.target.value)} placeholder='Enter any remarks...' />
+                      </div>
+                    </div>
                   </div>
-                ))}
+                 </div>
+              )}
 
-                {/* Amount Received */}
-                <div className='col d-flex flex-column align-items-center justify-content-center py-4 border-end border-gray-200'
-                  style={{ background: '#dcfce7' }}>
-                  <div className='fw-semibold text-muted fs-8 mb-2'>Amount Received</div>
-                  <input
-                    type='number' min='0' value={amountReceived || ''}
-                    onChange={e => setAmountReceived(Number(e.target.value))}
-                    className='form-control form-control-sm text-center fw-bolder border-0 rounded'
-                    placeholder='0'
-                    style={{ maxWidth: 110, background: '#16a34a', color: '#fff', fontSize: 17 }}
-                  />
-                </div>
+              {submitError && <div className='alert alert-danger fw-semibold mb-4'>{submitError}</div>}
 
-                {/* New Balance */}
-                <div className='col d-flex flex-column align-items-center justify-content-center py-4'
-                  style={{ background: newBalance > 0 ? '#fee2e2' : newBalance < 0 ? '#dcfce7' : '#f0f9ff' }}>
-                  <div className='fw-semibold text-muted fs-8 mb-2'>New Balance</div>
-                  <div className='fw-bolder fs-4'
-                    style={{ color: newBalance > 0 ? '#dc2626' : newBalance < 0 ? '#16a34a' : '#1e3a5f' }}>
-                    ₹{newBalance.toLocaleString('en-IN')}
+              {/* ── 6. Bottom Submit actions ── */}
+              { (selectedMonths.length > 0 || selectedAnnualCats.length > 0) && (
+                <div className='d-flex align-items-center justify-content-between flex-wrap gap-4 pt-3'>
+                  <div className='d-flex gap-6'>
+                    <div className='form-check form-check-custom form-check-solid'>
+                      <input className='form-check-input h-20px w-20px' type='checkbox' id='sendSMS' checked={sendSMS} onChange={e => setSendSMS(e.target.checked)} />
+                      <label className='form-check-label fw-bold text-gray-700 fs-7' htmlFor='sendSMS'>
+                        Send SMS <i className='bi bi-chat-left-text text-info ms-1'></i>
+                      </label>
+                    </div>
+                    <div className='form-check form-check-custom form-check-solid'>
+                      <input className='form-check-input h-20px w-20px' type='checkbox' id='sendWA' checked={sendWhatsApp} onChange={e => setSendWhatsApp(e.target.checked)} />
+                      <label className='form-check-label fw-bold text-gray-700 fs-7' htmlFor='sendWA'>
+                        Send WhatsApp <i className='bi bi-whatsapp text-success ms-1'></i>
+                      </label>
+                    </div>
                   </div>
-                </div>
-              </div>
-
-              {/* ─ Payment Details Row ── */}
-              <div className='py-5 px-3'>
-                <div className='row g-3 align-items-end'>
-                  {/* Payment Mode */}
-                  <div className='col-auto'>
-                    <label className='fw-semibold text-danger fw-bold fs-7 mb-2' style={{ display: 'block' }}>
-                      Payment Mode
-                    </label>
-                    <select className='form-select form-select-sm border-2 border-danger fw-bold'
-                      style={{ minWidth: 110, color: '#dc2626' }}
-                      value={paymentMode} onChange={e => setPaymentMode(e.target.value)}>
-                      {PAYMENT_MODES.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Bank Name */}
-                  <div className='col-md-2'>
-                    <label className='fw-semibold fs-8 text-gray-600 mb-2' style={{ display: 'block' }}>Bank Name</label>
-                    <input className='form-control form-control-sm form-control-solid'
-                      placeholder='Bank name' value={bankName} onChange={e => setBankName(e.target.value)} />
-                  </div>
-
-                  {/* Cheque / DD No */}
-                  <div className='col-md-2'>
-                    <label className='fw-semibold fs-8 text-gray-600 mb-2' style={{ display: 'block' }}>Cheque / DD No.</label>
-                    <input className='form-control form-control-sm form-control-solid'
-                      placeholder='Cheque no.' value={chequeNo} onChange={e => setChequeNo(e.target.value)} />
-                  </div>
-
-                  {/* Cheque Date */}
-                  <div className='col-md-2'>
-                    <label className='fw-semibold fs-8 text-gray-600 mb-2' style={{ display: 'block' }}>Cheque Date</label>
-                    <input type='date' className='form-control form-control-sm form-control-solid'
-                      value={chequeDate} onChange={e => setChequeDate(e.target.value)} />
-                  </div>
-
-                  {/* Payment Date */}
-                  <div className='col-md-2'>
-                    <label className='fw-semibold fs-8 text-gray-600 mb-2' style={{ display: 'block' }}>Payment Date</label>
-                    <input type='date' className='form-control form-control-sm form-control-solid'
-                      value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
-                  </div>
-
-                  {/* Remark */}
-                  <div className='col-md-2'>
-                    <label className='fw-semibold fs-8 text-gray-600 mb-2' style={{ display: 'block' }}>Remark</label>
-                    <input className='form-control form-control-sm form-control-solid'
-                      placeholder='Remark...' value={remark} onChange={e => setRemark(e.target.value)} />
+                  <div className='d-flex gap-3'>
+                    <button className='btn btn-light fw-bolder px-8 py-3 bg-gray-100 text-gray-700 hover-bg-gray-200' onClick={resetAll}>
+                      <i className='bi bi-arrow-repeat me-2'></i>Reset
+                    </button>
+                    <button
+                      className='btn btn-primary fw-bolder px-10 py-3 shadow-sm'
+                      style={{ background: '#3b82f6', border: 'none' }}
+                      onClick={handleSubmit}
+                      disabled={submitting || totals.totalReceivable <= 0}
+                    >
+                      {submitting
+                        ? <><span className='spinner-border spinner-border-sm me-2'></span>Processing...</>
+                        : <><i className='bi bi-shield-check me-2 fs-5'></i>Submit Payment</>
+                      }
+                    </button>
                   </div>
                 </div>
+              )}
 
-                {/* Error */}
-                {submitError && (
-                  <div className='alert alert-danger d-flex align-items-center gap-2 py-3 mt-4'>
-                    <i className='ki-duotone ki-information-4 fs-3 text-danger'><span className='path1' /><span className='path2' /><span className='path3' /></i>
-                    {submitError}
-                  </div>
-                )}
-
-                {/* Submit Button */}
-                <div className='mt-5'>
-                  <button
-                    className='btn btn-lg w-100 fw-bolder text-white fs-5'
-                    style={{
-                      background: 'linear-gradient(135deg, #dc2626, #ef4444)',
-                      border: 'none',
-                      borderRadius: 8,
-                      padding: '14px',
-                      letterSpacing: 0.5,
-                      boxShadow: '0 4px 16px rgba(220,38,38,0.35)',
-                      opacity: submitting || selectedMonths.length === 0 || amountReceived <= 0 ? 0.6 : 1,
-                    }}
-                    onClick={handleSubmit}
-                    disabled={submitting || selectedMonths.length === 0 || amountReceived <= 0}
-                  >
-                    {submitting ? (
-                      <><span className='spinner-border spinner-border-sm me-2' />Processing Payment...</>
-                    ) : (
-                      <><i className='ki-duotone ki-check-circle fs-2 me-2 text-white'><span className='path1' /><span className='path2' /></i>
-                        COLLECT PAYMENT — ₹{amountReceived.toLocaleString('en-IN')}
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* UPI strip */}
-                <div className='d-flex align-items-center justify-content-center mt-4 rounded py-3 px-5 gap-4'
-                  style={{ background: 'linear-gradient(135deg, #1e3a5f, #2563eb)' }}>
-                  <i className='ki-duotone ki-barcode fs-2x text-white'><span className='path1' /><span className='path2' /><span className='path3' /><span className='path4' /><span className='path5' /><span className='path6' /><span className='path7' /></i>
-                  <span className='text-white fw-semibold fs-6'>Pay via UPI — <span className='text-warning'>school@upi</span></span>
-                </div>
-              </div>
             </div>
           </div>
         )}
-
-        {/* ── EMPTY STATE ── */}
-        {!selStudent && !loadingMeta && (
-          <div className='card card-flush'>
-            <div className='card-body d-flex flex-column align-items-center justify-content-center py-20 text-center'>
-              <div className='mb-6' style={{
-                width: 100, height: 100, borderRadius: '50%',
-                background: 'linear-gradient(135deg, #e0e7ff, #c7d2fe)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <i className='ki-duotone ki-wallet fs-4x text-primary'><span className='path1' /><span className='path2' /><span className='path3' /></i>
-              </div>
-              <h4 className='fw-bold text-gray-700 mb-2'>Start Fee Collection</h4>
-              <p className='text-muted fs-6 mb-0 mx-auto' style={{ maxWidth: 380 }}>
-                Select an <strong>Academic Session</strong>, then <strong>Class</strong>, then <strong>Section</strong>, and finally the <strong>Student</strong> above to view their pending fees and collect payment.
-              </p>
-              <div className='d-flex gap-3 mt-8 flex-wrap justify-content-center'>
-                {[
-                  { icon: 'ki-duotone ki-book', label: 'Select Session & Class', color: 'primary' },
-                  { icon: 'ki-duotone ki-calendar', label: 'Pick Months to Pay', color: 'info' },
-                  { icon: 'ki-duotone ki-dollar', label: 'Enter Amount & Collect', color: 'success' },
-                ].map(({ icon, label, color }) => (
-                  <div key={label} className={`d-flex align-items-center gap-2 bg-light-${color} rounded px-4 py-2`}>
-                    <i className={`${icon} fs-3 text-${color}`}><span className='path1' /><span className='path2' /></i>
-                    <span className={`fw-semibold text-${color} fs-7`}>{label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
       </Content>
 
-      {/* ── SUCCESS RECEIPT MODAL ── */}
-      <Modal show={showSuccess} onHide={() => setShowSuccess(false)} centered>
-        <Modal.Body className='py-10 px-10 text-center'>
-          <div className='symbol symbol-90px mx-auto mb-5 rounded-circle'
-            style={{ background: 'linear-gradient(135deg, #dcfce7, #bbf7d0)' }}>
-            <div className='symbol-label d-flex align-items-center justify-content-center'>
-              <i className='ki-duotone ki-check-circle fs-4x text-success'><span className='path1' /><span className='path2' /></i>
-            </div>
-          </div>
-          <h3 className='fw-bold text-gray-900 mb-2'>Payment Successful!</h3>
-          <p className='text-muted mb-5'>Fee collected successfully for {selectedEnrol?.student?.first_name} {selectedEnrol?.student?.last_name}</p>
-
-          {lastReceipt && (
-            <div className='bg-light rounded-2 p-5 text-start mb-5'>
-              <div className='d-flex justify-content-between py-2 border-bottom border-gray-200'>
-                <span className='text-muted fs-7'>Receipt No.</span>
-                <span className='fw-bold'>TXN-{lastReceipt.id}</span>
-              </div>
-              <div className='d-flex justify-content-between py-2 border-bottom border-gray-200'>
-                <span className='text-muted fs-7'>Amount Collected</span>
-                <span className='fw-bolder text-success fs-5'>₹{Number(lastReceipt.amount_paid).toLocaleString('en-IN')}</span>
-              </div>
-              <div className='d-flex justify-content-between py-2 border-bottom border-gray-200'>
-                <span className='text-muted fs-7'>Payment Mode</span>
-                <span className='fw-bold'>{lastReceipt.payment_mode}</span>
-              </div>
-              <div className='d-flex justify-content-between py-2'>
-                <span className='text-muted fs-7'>Date</span>
-                <span className='fw-bold'>{lastReceipt.payment_date ? new Date(lastReceipt.payment_date).toLocaleDateString('en-IN') : '—'}</span>
-              </div>
-            </div>
-          )}
-
-          <button className='btn btn-success w-100 fw-bold' onClick={() => setShowSuccess(false)}>
-            Collect Next Payment
-          </button>
+      <Modal show={showModal} onHide={() => setShowModal(false)} centered>
+        <Modal.Body className='p-0 text-center overflow-hidden rounded'>
+           <div className='p-8 border-bottom text-white' style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}>
+             <i className='bi bi-patch-check-fill text-white opacity-75' style={{ fontSize: '4.5rem' }}></i>
+             <h2 className='text-white fw-bolder mt-3 mb-1'>Payment Successful</h2>
+             <span className='fs-8 fw-semibold opacity-75'>Receipt ID: TXN-{lastReceipt?.id || '—'}</span>
+           </div>
+           ...
         </Modal.Body>
       </Modal>
     </>
   )
 }
 
+// ─── Inline Render Helpers ──────────────────────────────────────────────────────
+
+function वार्षिकRowRender(
+  annualItems: YearlyMatrixItem[],
+  allMonths: string[], 
+  selectedAnnualCats: number[], 
+  toggleAnnualCat: (id: number) => void
+) {
+  return annualItems.map(item => {
+    // Determine the FIRST applicable month to display the price, others show '--'
+    let priceRendered = false
+    const isSelected = selectedAnnualCats.includes(item.category_id)
+    
+    // Check if it's already paid anywhere
+    let isFullyPaid = false
+    allMonths.forEach(m => {
+      const cell = item.months[m]
+      if (cell && cell.status === 'PAID') isFullyPaid = true
+    })
+
+    return (
+       <tr key={item.category_id}>
+         <td className='ps-4 py-3 text-nowrap'>
+            <div className='fw-bold text-gray-800 d-flex align-items-center gap-3'>
+               {item.category_name}
+               <span className='badge badge-light-warning px-2 py-1' style={{fontSize: '0.6rem'}}>{item.frequency}</span>
+            </div>
+         </td>
+         {/* It only applies to the tableCols (but wait, tableCols might be empty if no months are selected, so annuals might glitch? The requirement is to show annuals spanning across the selected months. Or if tableCols goes away, the table goes away.)
+            Wait, in the React Tree above I put it inside tableCols. We should render it spanning all columns.
+            If `tableCols` has length 0, the table doesn't render. 
+         */}
+         <td colSpan={allMonths.length} className='text-start border-0'>
+            <label className='d-inline-flex align-items-center gap-2 ms-4 cursor-pointer p-2 rounded hover-bg-light shadow-sm border border-gray-100'>
+              <input type='checkbox' className='form-check-input h-15px w-15px mt-0 cursor-pointer border-gray-300'
+                checked={isSelected || isFullyPaid} 
+                disabled={isFullyPaid}
+                readOnly
+                onChange={() => !isFullyPaid && toggleAnnualCat(item.category_id)} />
+              
+              <span className={clsx('fw-bolder fs-7', isFullyPaid ? 'text-success' : isSelected ? 'text-primary' : 'text-gray-700')}>
+                ₹{item.total.toLocaleString('en-IN')}
+              </span>
+              
+              {isFullyPaid && <span className='badge badge-light-success px-2 py-1 fs-9 ms-2'>PAID</span>}
+            </label>
+         </td>
+       </tr>
+    )
+  })
+}
+
+function मासिकRowRender(
+  monthlyItems: YearlyMatrixItem[],
+  tableCols: string[],
+  checkedCells: Record<string, boolean>,
+  toggleMonthlyCell: (id: number, m: string) => void
+) {
+  return monthlyItems.map(item => {
+    return (
+      <tr key={item.category_id} className='hover-bg-light'>
+        <td className='ps-4 py-3 text-nowrap'>
+          <div className='fw-bold text-gray-800'>{item.category_name}</div>
+        </td>
+        {tableCols.map(m => {
+           const cell = item.months[m]
+           const isApplicable = cell && cell.applicable
+           const isPaid = cell && cell.status === 'PAID'
+           const amt = cell ? cell.amount : 0
+           const isChecked = !!checkedCells[`${item.category_id}__${m}`]
+
+           return (
+              <td key={m} className='text-center py-3 border-start-dashed border-gray-200'>
+                {isApplicable ? (
+                  <label className='d-inline-flex align-items-center gap-1 cursor-pointer p-1 rounded' onClick={(e) => { e.preventDefault(); toggleMonthlyCell(item.category_id, m) }}>
+                     <input type='checkbox' className={clsx('form-check-input h-15px w-15px mt-0', isPaid ? 'border-success bg-success' : 'border-gray-400')}
+                       checked={isChecked || isPaid} readOnly disabled={isPaid} />
+                     <span className={clsx('fw-bold ms-1', isPaid ? 'text-success text-decoration-line-through opacity-75' : isChecked ? 'text-primary' : 'text-gray-600')}>
+                       {amt > 0 ? `₹${amt}` : '—'}
+                     </span>
+                  </label>
+                ) : (
+                  <span className='text-gray-300 fw-semibold fs-8'>—</span>
+                )}
+              </td>
+           )
+        })}
+      </tr>
+    )
+  })
+}
+
 const MonthlyCollectionWrapper: FC = () => (
   <>
-    <PageTitle breadcrumbs={[
-      { title: 'Fees', path: '/fees/collection', isActive: false },
-      { title: 'Monthly Collection', path: '/fees/monthly', isActive: true }
-    ]}>
-      Monthly Fee Collection
+    <PageTitle breadcrumbs={[{ title: 'Fees', path: '/fees/monthly', isActive: false }, { title: 'Fee Collection', path: '/fees/monthly', isActive: true }]}>
+      Receipt Breakdown
     </PageTitle>
-    <MonthlyCollectionPage />
+    <FeeCollectionPage />
   </>
 )
 
