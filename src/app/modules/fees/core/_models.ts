@@ -104,11 +104,18 @@ export interface FeeInvoiceModel {
   student?: { id: number; first_name: string; last_name: string; email?: string }
 }
 
+// This now generates ALL 12 months for all active students in a class (yearly mode)
 export interface GenerateInvoicesPayload {
   class_id: number
   academic_session_id: number
-  month: string // 'YYYY-MM'
-  due_date: string
+}
+
+export interface GenerateInvoicesResult {
+  message: string
+  generated: number
+  updated: number
+  total_students: number
+  total_months_per_student: number
 }
 
 export interface YearlyMatrixMonthData {
@@ -150,10 +157,15 @@ export interface FeePaymentModel {
 export interface CollectPaymentPayload {
   student_id: number
   academic_session_id: number
-  amount: number
-  payment_method: string
-  payment_date: string
+  amount: number                    // Total amount being paid
+  payment_method: string            // CASH, ONLINE, CHEQUE, UPI, DD
+  payment_date: string              // YYYY-MM-DD
+  reference_number?: string         // Cheque / UPI / transaction ref
   notes?: string
+  invoice_payments?: {              // Per-invoice breakdown (recommended for monthly collection)
+    invoice_id: number
+    amount_applied: number
+  }[]
 }
 
 // ─── Discount ─────────────────────────────────────────────────────────────────

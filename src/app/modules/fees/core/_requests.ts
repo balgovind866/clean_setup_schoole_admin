@@ -101,6 +101,18 @@ export const getYearlyMatrix = (
     `${BASE(schoolId)}/students/${studentId}/sessions/${sessionId}/yearly-matrix`
   )
 
+// GET /fee/invoices/:id  – fetch single invoice with items + payment history
+export const getInvoiceById = (schoolId: string | number, invoiceId: number) =>
+  axios.get<ApiResponse<FeeInvoiceModel>>(`${BASE(schoolId)}/invoices/${invoiceId}`)
+
+// PUT /fees/invoices/:id – update fine_amount / concession_amount on a single invoice
+export const updateInvoice = (
+  schoolId: string | number,
+  invoiceId: number,
+  payload: { fine_amount?: number; concession_amount?: number }
+) =>
+  axios.put<ApiResponse<FeeInvoiceModel>>(`${BASE(schoolId)}/invoices/${invoiceId}`, payload)
+
 // ─── Payments ─────────────────────────────────────────────────────────────────
 export const collectPayment = (schoolId: string | number, payload: CollectPaymentPayload) =>
   axios.post<ApiResponse<FeePaymentModel>>(`${BASE(schoolId)}/payments/collect`, payload)

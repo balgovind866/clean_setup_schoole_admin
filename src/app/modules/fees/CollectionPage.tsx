@@ -7,7 +7,7 @@ import { useAuth } from '../auth'
 import { generateInvoices, collectPayment, getPayments } from './core/_requests'
 import { getAcademicSessions, getClasses } from '../academic/core/_requests'
 import { getStudents } from '../students/core/_requests'
-import { FeePaymentModel } from './core/_models'
+import { FeePaymentModel, GenerateInvoicesResult } from './core/_models'
 import { extractArray, extractError } from './core/_utils'
 
 const PAYMENT_METHODS = ['Cash', 'Cheque', 'Online', 'UPI', 'DD']
@@ -43,29 +43,27 @@ const CollectionPage: FC = () => {
 
   useEffect(() => { loadMeta() }, [loadMeta])
 
-  // ── Generate Invoices ──────────────────────────────────────────────────────
-  const [genForm, setGenForm] = useState({
-    class_id: '', academic_session_id: '', month: '', due_date: '',
-  })
+  // ── Generate Invoices (Yearly mode) ─────────────────────────────────────────
+  const [genForm, setGenForm] = useState({ class_id: '', academic_session_id: '' })
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
-  const [genSuccess, setGenSuccess] = useState<string | null>(null)
+  const [genResult, setGenResult] = useState<GenerateInvoicesResult | null>(null)
 
   const handleGenerate = async () => {
-    if (!genForm.class_id || !genForm.academic_session_id || !genForm.month || !genForm.due_date) {
-      setGenError('All fields are required'); return
+    if (!genForm.class_id || !genForm.academic_session_id) {
+      setGenError('Please select both Class and Academic Session'); return
     }
-    setGenerating(true); setGenError(null); setGenSuccess(null)
+    setGenerating(true); setGenError(null); setGenResult(null)
     try {
       const { data } = await generateInvoices(schoolId, {
         class_id: Number(genForm.class_id),
         academic_session_id: Number(genForm.academic_session_id),
-        month: genForm.month,
-        due_date: genForm.due_date,
       })
       if (data.success) {
-        setGenSuccess(`✓ ${data.data.generated || 0} invoices generated successfully!`)
-        setGenForm({ class_id: '', academic_session_id: '', month: '', due_date: '' })
+        setGenResult(data.data as any)
+        setGenForm({ class_id: '', academic_session_id: '' })
+      } else {
+        setGenError(data.message || 'Failed to generate invoices')
       }
     } catch (e: any) {
       setGenError(e.response?.data?.message || 'Failed to generate invoices')
@@ -300,29 +298,29 @@ const CollectionPage: FC = () => {
           </div>
         )}
 
-        {/* ══════════════ TAB: GENERATE INVOICES ══════════════ */}
+        {/* ══════════════ TAB: GENERATE INVOICES (Yearly) ══════════════ */}
         {activeTab === 'generate' && (
-          <div className='row'>
+          <div className='row g-6'>
+            {/* Left: Form Card */}
             <div className='col-lg-6'>
-              <div className='card card-flush'>
+              <div className='card card-flush h-100'>
                 <div className='card-header border-0 pt-6'>
                   <div className='card-title d-flex align-items-center'>
-                    <div className='symbol symbol-40px bg-light-primary rounded me-3'>
+                    <div className='symbol symbol-45px bg-light-primary rounded me-3'>
                       <div className='symbol-label d-flex align-items-center justify-content-center'>
                         <i className='ki-duotone ki-bill fs-2 text-primary'><span className='path1' /><span className='path2' /></i>
                       </div>
                     </div>
                     <div>
-                      <h4 className='fw-bold mb-0'>Generate Bulk Invoices</h4>
-                      <span className='text-muted fs-7'>Auto-generate invoices for all students in a class</span>
+                      <h4 className='fw-bold mb-0'>Generate Yearly Invoices</h4>
+                      <span className='text-muted fs-7'>Auto-generate all 12 months of invoices for a class</span>
                     </div>
                   </div>
                 </div>
-                <div className='card-body pt-4'>
+                <div className='card-body pt-2'>
                   {genError && <Alert variant='danger' dismissible onClose={() => setGenError(null)}>{genError}</Alert>}
-                  {genSuccess && <Alert variant='success' dismissible onClose={() => setGenSuccess(null)}>{genSuccess}</Alert>}
 
-                  <div className='mb-5'>
+                  <div className='mb-6'>
                     <label className='required fw-semibold fs-6 mb-2'>Class</label>
                     <select className='form-select form-select-solid' value={genForm.class_id}
                       onChange={e => setGenForm(p => ({ ...p, class_id: e.target.value }))}>
@@ -331,7 +329,7 @@ const CollectionPage: FC = () => {
                     </select>
                   </div>
 
-                  <div className='mb-5'>
+                  <div className='mb-8'>
                     <label className='required fw-semibold fs-6 mb-2'>Academic Session</label>
                     <select className='form-select form-select-solid' value={genForm.academic_session_id}
                       onChange={e => setGenForm(p => ({ ...p, academic_session_id: e.target.value }))}>
@@ -340,34 +338,95 @@ const CollectionPage: FC = () => {
                     </select>
                   </div>
 
-                  <div className='row g-4 mb-7'>
-                    <div className='col-md-6'>
-                      <label className='required fw-semibold fs-6 mb-2'>Invoice Month</label>
-                      <input type='month' className='form-control form-control-solid'
-                        value={genForm.month} onChange={e => setGenForm(p => ({ ...p, month: e.target.value }))} />
-                    </div>
-                    <div className='col-md-6'>
-                      <label className='required fw-semibold fs-6 mb-2'>Due Date</label>
-                      <input type='date' className='form-control form-control-solid'
-                        value={genForm.due_date} onChange={e => setGenForm(p => ({ ...p, due_date: e.target.value }))} />
-                    </div>
-                  </div>
-
-                  <div className='notice d-flex bg-light-warning rounded p-4 mb-6'>
-                    <i className='ki-duotone ki-information-4 fs-2x text-warning me-3'><span className='path1' /><span className='path2' /><span className='path3' /></i>
-                    <div className='text-muted fs-7'>
-                      The system will find <strong>all Active students</strong> enrolled in the selected class and generate invoice breakdowns based on the fee structure assigned to that class.
+                  {/* Info notice */}
+                  <div className='notice d-flex bg-light-info rounded-2 border border-info border-opacity-25 p-5 mb-6'>
+                    <i className='ki-duotone ki-information-4 fs-2x text-info me-4 flex-shrink-0'>
+                      <span className='path1' /><span className='path2' /><span className='path3' />
+                    </i>
+                    <div className='fs-7 text-gray-700'>
+                      <div className='fw-bold text-gray-800 mb-1'>Yearly Invoice Generation</div>
+                      This will generate <strong>12 invoices per student</strong> (Apr – Mar) for all active students in the selected class & session.
+                      If invoices already exist for a month, they will be <strong>skipped or updated</strong> automatically — no duplicates.
                     </div>
                   </div>
 
-                  <button className='btn btn-primary w-100' onClick={handleGenerate} disabled={generating}>
+                  <button
+                    className='btn btn-primary w-100 py-3 fw-bold fs-6'
+                    onClick={handleGenerate}
+                    disabled={generating || !genForm.class_id || !genForm.academic_session_id}
+                  >
                     {generating
-                      ? <><span className='spinner-border spinner-border-sm me-2' />Generating...</>
-                      : <><i className='ki-duotone ki-bill fs-2 me-2'><span className='path1' /><span className='path2' /></i>Generate Invoices</>
+                      ? <><span className='spinner-border spinner-border-sm me-2' />Generating All 12 Months...</>
+                      : <><i className='ki-duotone ki-bill fs-3 me-2'><span className='path1' /><span className='path2' /></i>Generate Full Year Invoices</>
                     }
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Right: Result / Info panel */}
+            <div className='col-lg-6'>
+              {genResult ? (
+                /* Success Result Card */
+                <div className='card card-flush border-0 h-100' style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', border: '1px solid #bbf7d0' }}>
+                  <div className='card-body d-flex flex-column align-items-center justify-content-center text-center py-10 px-8'>
+                    <div className='symbol symbol-80px mb-6 rounded-circle bg-success bg-opacity-15'>
+                      <div className='symbol-label d-flex align-items-center justify-content-center'>
+                        <i className='bi bi-check-circle-fill text-success' style={{ fontSize: '2.5rem' }}></i>
+                      </div>
+                    </div>
+                    <h3 className='fw-bolder text-gray-900 mb-2'>Invoices Generated!</h3>
+                    <p className='text-muted fs-7 mb-8'>Yearly invoicing process completed successfully</p>
+
+                    {/* Result stats grid */}
+                    <div className='row g-4 w-100 mb-4'>
+                      {[
+                        { label: 'Newly Generated', value: genResult.generated, color: 'success', icon: 'bi-file-earmark-plus' },
+                        { label: 'Already Existed', value: genResult.updated, color: 'warning', icon: 'bi-arrow-repeat' },
+                        { label: 'Total Students', value: genResult.total_students, color: 'primary', icon: 'bi-people' },
+                        { label: 'Months / Student', value: genResult.total_months_per_student, color: 'info', icon: 'bi-calendar3' },
+                      ].map(({ label, value, color, icon }) => (
+                        <div className='col-6' key={label}>
+                          <div className='rounded-2 p-4 text-center' style={{ background: 'rgba(255,255,255,0.7)' }}>
+                            <i className={`bi ${icon} text-${color} mb-2`} style={{ fontSize: '1.4rem', display: 'block' }}></i>
+                            <div className={`fw-bolder text-${color} fs-2`}>{value}</div>
+                            <div className='text-muted fw-semibold fs-8'>{label}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button className='btn btn-light-success fw-bold px-8'
+                      onClick={() => setGenResult(null)}>
+                      <i className='bi bi-arrow-left me-2'></i>Generate Another
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Info / guidance card */
+                <div className='card card-flush border-0 h-100 bg-light-primary'>
+                  <div className='card-body d-flex flex-column align-items-start justify-content-center px-8 py-10'>
+                    <i className='ki-duotone ki-calendar fs-5x text-primary mb-6'>
+                      <span className='path1' /><span className='path2' />
+                    </i>
+                    <h4 className='fw-bolder text-gray-800 mb-3'>How Yearly Generation Works</h4>
+                    <div className='d-flex flex-column gap-4 text-start w-100'>
+                      {[
+                        { icon: 'bi-search', color: 'primary', text: 'Finds all Active students enrolled in the selected class' },
+                        { icon: 'bi-calendar-range', color: 'primary', text: 'Generates invoices for all 12 months (Apr – Mar) in one click' },
+                        { icon: 'bi-shield-check', color: 'success', text: 'Skips months where invoices already exist — no duplicates' },
+                        { icon: 'bi-boxes', color: 'info', text: 'Each invoice includes all fee items assigned to the student\'s fee group' },
+                        { icon: 'bi-graph-up-arrow', color: 'warning', text: 'After generating, use the Fee Collection page to collect month-wise' },
+                      ].map(({ icon, color, text }) => (
+                        <div key={text} className='d-flex align-items-start gap-3'>
+                          <i className={`bi ${icon} text-${color} flex-shrink-0 mt-1`} style={{ fontSize: '1rem' }}></i>
+                          <span className='fw-semibold text-gray-700 fs-7'>{text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
