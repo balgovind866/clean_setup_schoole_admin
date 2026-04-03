@@ -147,11 +147,49 @@ export interface FeePaymentModel {
   payment_mode: 'CASH' | 'ONLINE' | 'CHEQUE' | 'DD' | 'UPI'
   payment_date: string
   transaction_id: string | null
-  collected_by: number
+  collected_by: number | null
   remarks: string | null
   createdAt: string
   updatedAt: string
-  student?: { id: number; first_name: string; last_name: string }
+  // Populated relations
+  student?: {
+    id: number
+    first_name: string
+    last_name: string
+    mobile_number?: string
+    enrollments?: Array<{
+      id: number
+      roll_number: string
+      class_section?: {
+        class?: { name: string }
+        section?: { name: string }
+      }
+    }>
+  }
+  invoice?: {
+    id: number
+    invoice_month: string
+    total_amount: string
+    net_amount: string
+    paid_amount: string
+    status: 'PAID' | 'PARTIAL' | 'UNPAID' | 'OVERDUE'
+    items?: Array<{
+      id: number
+      fee_invoice_id: number
+      fee_category_id: number
+      amount: string
+      fee_category?: { id: number; name: string }
+    }>
+  }
+  // Extra computed fields from API
+  student_current_balance?: string
+  student_class_info?: string
+  fee_breakdown?: Array<{
+    category_id: number
+    category_name: string
+    full_amount: string
+    paid_in_this_transaction: string
+  }>
 }
 
 export interface CollectPaymentPayload {

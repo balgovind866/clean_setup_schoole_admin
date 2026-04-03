@@ -7,10 +7,10 @@ import { useAuth } from '../../../../../app/modules/auth'
 const SidebarMenuMain = () => {
   const intl = useIntl()
   const { currentUser } = useAuth()
-  
+
   const isSuperAdmin = currentUser?.role === 'super_admin'
   const isAdmin = currentUser?.role === 'admin'
-  
+
   // Check if user has permission to view a module
   const hasPermission = (moduleName: string) => {
     if (isSuperAdmin || isAdmin) return true;
@@ -39,7 +39,7 @@ const SidebarMenuMain = () => {
           fontIcon='bi-app-indicator'
         >
           {isSuperAdmin && (
-             <SidebarMenuItem to='/administration/schools' title='Schools' hasBullet={true} />
+            <SidebarMenuItem to='/administration/schools' title='Schools' hasBullet={true} />
           )}
           {(isSuperAdmin || isAdmin || hasPermission('staff')) && (
             <SidebarMenuItem to='/administration/staff' title='Manage Staff' hasBullet={true} />
@@ -92,10 +92,10 @@ const SidebarMenuMain = () => {
             <SidebarMenuItemWithSub to='/fees' title='Fees' icon='dollar' fontIcon='bi-cash-stack'>
               <SidebarMenuItem to='/fees/monthly' title='📋 Monthly Collection' hasBullet={true} />
               <SidebarMenuItem to='/fees/structure' title='Fee Structure' hasBullet={true} />
-              <SidebarMenuItem to='/fees/collection' title='Quick Collect' hasBullet={true} />
+              <SidebarMenuItem to='/fees/collection' title='Student Yearly Invoice Generate' hasBullet={true} />
               <SidebarMenuItem to='/fees/tracking' title='Tracking' hasBullet={true} />
               <SidebarMenuItem to='/fees/receipts' title='Receipts' hasBullet={true} />
-              <SidebarMenuItem to='/fees/concessions' title='Concessions' hasBullet={true} />
+              {/* <SidebarMenuItem to='/fees/concessions' title='Concessions' hasBullet={true} /> */}
               <SidebarMenuItem to='/fees/reports' title='Reports' hasBullet={true} />
             </SidebarMenuItemWithSub>
           )}
@@ -111,13 +111,13 @@ const SidebarMenuMain = () => {
           )}
 
           {hasPermission('examination') && (
-             <SidebarMenuItemWithSub to='/examination' title='Examination' icon='notepad' fontIcon='bi-journal-text'>
-                <SidebarMenuItem to='/examination/exams' title='Exams' hasBullet={true} />
-                <SidebarMenuItem to='/examination/marks' title='Marks Entry' hasBullet={true} />
-                <SidebarMenuItem to='/examination/report-cards' title='Report Cards' hasBullet={true} />
-                <SidebarMenuItem to='/examination/results' title='Results' hasBullet={true} />
-                <SidebarMenuItem to='/examination/online' title='Online Exams' hasBullet={true} />
-              </SidebarMenuItemWithSub>
+            <SidebarMenuItemWithSub to='/examination' title='Examination' icon='notepad' fontIcon='bi-journal-text'>
+              <SidebarMenuItem to='/examination/exams' title='Exams' hasBullet={true} />
+              <SidebarMenuItem to='/examination/marks' title='Marks Entry' hasBullet={true} />
+              <SidebarMenuItem to='/examination/report-cards' title='Report Cards' hasBullet={true} />
+              <SidebarMenuItem to='/examination/results' title='Results' hasBullet={true} />
+              <SidebarMenuItem to='/examination/online' title='Online Exams' hasBullet={true} />
+            </SidebarMenuItemWithSub>
           )}
 
           {hasPermission('library') && (
@@ -178,12 +178,12 @@ const SidebarMenuMain = () => {
 
           {hasPermission('reports') && (
             <SidebarMenuItemWithSub to='/reports' title='Reports' icon='chart-simple' fontIcon='bi-bar-chart'>
-               <SidebarMenuItem to='/reports/students' title='Student Reports' hasBullet={true} />
-               <SidebarMenuItem to='/reports/attendance' title='Attendance' hasBullet={true} />
-               <SidebarMenuItem to='/reports/financial' title='Financial' hasBullet={true} />
-               <SidebarMenuItem to='/reports/staff' title='Staff' hasBullet={true} />
-               <SidebarMenuItem to='/reports/custom' title='Custom' hasBullet={true} />
-               <SidebarMenuItem to='/reports/export' title='Export' hasBullet={true} />
+              <SidebarMenuItem to='/reports/students' title='Student Reports' hasBullet={true} />
+              <SidebarMenuItem to='/reports/attendance' title='Attendance' hasBullet={true} />
+              <SidebarMenuItem to='/reports/financial' title='Financial' hasBullet={true} />
+              <SidebarMenuItem to='/reports/staff' title='Staff' hasBullet={true} />
+              <SidebarMenuItem to='/reports/custom' title='Custom' hasBullet={true} />
+              <SidebarMenuItem to='/reports/export' title='Export' hasBullet={true} />
             </SidebarMenuItemWithSub>
           )}
 
