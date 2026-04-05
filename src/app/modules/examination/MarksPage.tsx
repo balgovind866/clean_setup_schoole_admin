@@ -79,17 +79,44 @@ const MarksPage: FC = () => {
     if (!filterExam || !students.length) return
     setSaving(true); setSaveMsg(null)
     try {
-      const payload = students.map(s => ({
-        student_id: s.id,
-        marks_obtained: Number(marks[s.id]?.marks || 0),
-        is_absent: marks[s.id]?.absent || false,
-        remarks: marks[s.id]?.remarks || undefined,
-      }))
+      // Create payload matching exact Postman format
+      const payload = students
+        .filter(s => {
+          const m = marks[s.id]
+          return m && (m.marks !== '' || m.absent)
+        })
+        .map(s => {
+          const m = marks[s.id]
+          const isAbsent = Boolean(m.absent)
+          const markVal = isAbsent ? 0 : Number(m.marks || 0)
+          
+          const entry: any = {
+            student_id: Number(s.id),
+            marks_obtained: markVal,
+            is_absent: isAbsent,
+          }
+          if (m.remarks && m.remarks.trim() !== '') {
+            entry.remarks = m.remarks.trim()
+          }
+          return entry
+        })
+
+      console.log('Sending payload:', { exam_id: Number(filterExam), marks: payload })
+
+      if (payload.length === 0) {
+        setSaveMsg({ type: 'danger', text: 'No marks entered to save.' })
+        setSaving(false)
+        return
+      }
+
       const { data } = await bulkMarksEntry(schoolId, Number(filterExam), payload)
       setSaveMsg({ type: 'success', text: `✓ ${data.count || 0} student marks saved successfully!` })
       loadMarksheet()
     } catch (e: any) {
-      setSaveMsg({ type: 'danger', text: e.response?.data?.message || 'Failed to save marks' })
+      const errData = e.response?.data;
+      console.error('Save marks error response:', errData);
+      const errMsg = errData?.message || errData?.error || e.message || 'Failed to save marks';
+      setSaveMsg({ type: 'danger', text: `Error: ${errMsg}. Check console.` })
     } finally { setSaving(false) }
   }
 

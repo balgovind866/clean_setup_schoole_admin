@@ -8,6 +8,9 @@ import {
   ClassSubjectMappingCreationData, ClassSubjectMappingResponse,
   ClassSubjectMappingsListResponse, AssignClassTeacherPayload,
   ClassTeacherMappingResponse,
+  TeacherAllocationPayload,
+  TeacherAllocationsListResponse,
+  TeacherAllocationResponse,
 } from './_models'
 
 
@@ -186,3 +189,39 @@ export function assignClassTeacher(
   )
 }
 
+// ─── Teacher Allocation API ─────────────────────────────────────────────────
+
+const TEACHER_ALLOCATIONS_URL = (schoolId: string | number) =>
+  `${API_URL}/school/${schoolId}/teacher-allocations`
+
+export function getTeacherAllocations(
+  schoolId: string | number,
+  params: { class_section_id?: number; academic_session_id?: number; subject_id?: number } = {}
+) {
+  return axios.get<TeacherAllocationsListResponse>(TEACHER_ALLOCATIONS_URL(schoolId), { params })
+}
+
+export function allocateTeacher(
+  schoolId: string | number,
+  payload: TeacherAllocationPayload
+) {
+  return axios.post<TeacherAllocationResponse>(TEACHER_ALLOCATIONS_URL(schoolId), payload)
+}
+
+export function updateTeacherAllocation(
+  schoolId: string | number,
+  allocationId: number,
+  teacherId: number
+) {
+  return axios.put<TeacherAllocationResponse>(
+    `${TEACHER_ALLOCATIONS_URL(schoolId)}/${allocationId}`,
+    { teacher_id: teacherId }
+  )
+}
+
+export function deleteTeacherAllocation(
+  schoolId: string | number,
+  allocationId: number
+) {
+  return axios.delete(`${TEACHER_ALLOCATIONS_URL(schoolId)}/${allocationId}`)
+}

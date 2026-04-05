@@ -221,3 +221,40 @@ export interface ClassTeacherMappingResponse {
   data: { mapping: any };
 }
 
+// ─── Teacher Allocation Models ───────────────────────────────────────────────
+
+export interface TeacherAllocationModel {
+  id: number;
+  teacher_id: number;
+  class_section_id: number;
+  subject_id: number;
+  academic_session_id: number;
+  createdAt?: string;
+  updatedAt?: string;
+  teacher?: { id: number; name: string };
+  subject?: { id: number; name: string; code: string };
+  class_section?: {
+    id: number;
+    class?: { id: number; name: string };
+    section?: { id: number; name: string };
+  };
+}
+
+export interface TeacherAllocationPayload {
+  teacher_id: number;
+  class_section_id: number;
+  subject_id: number;
+  academic_session_id: number;
+}
+
+export interface TeacherAllocationsListResponse {
+  success: boolean;
+  count: number;
+  data: TeacherAllocationModel[];
+}
+
+export interface TeacherAllocationResponse {
+  success: boolean;
+  message: string;
+  data: TeacherAllocationModel;
+}
