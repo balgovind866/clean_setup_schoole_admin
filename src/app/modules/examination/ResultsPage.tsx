@@ -3,9 +3,10 @@ import { PageTitle } from '../../../_metronic/layout/core'
 import { ToolbarWrapper } from '../../../_metronic/layout/components/toolbar'
 import { Content } from '../../../_metronic/layout/components/content'
 import { useAuth } from '../auth'
-import { getExamGroups, getMarksheet } from './core/_requests'
+import { getExamGroups, getMarksheet, downloadStudentReportCardPdf } from './core/_requests'
 import { ExamGroup, ExamSubject, MarksheetStudent, ExamResult } from './core/_models'
 import { getClasses } from '../academic/core/_requests'
+import { toast } from 'react-toastify'
 
 const fmt = (n: string | number) => Number(n).toFixed(1)
 
@@ -23,6 +24,7 @@ const ResultsPage: FC = () => {
   const [exams, setExams] = useState<ExamSubject[]>([])
   const [students, setStudents] = useState<MarksheetStudent[]>([])
   const [results, setResults] = useState<ExamResult[]>([])
+  const [downloadingReport, setDownloadingReport] = useState<number | null>(null)
 
   const loadMeta = useCallback(async () => {
     if (metaLoaded || !schoolId) return
@@ -72,6 +74,26 @@ const ResultsPage: FC = () => {
 
   const selectedGroup = groups.find(g => String(g.id) === filterGroup)
   const selectedClass = classes.find(c => String(c.id) === filterClass)
+
+  const handleDownloadPdf = async (studentId: number, name: string) => {
+    if (!filterGroup) return
+    setDownloadingReport(studentId)
+    try {
+      const res = await downloadStudentReportCardPdf(schoolId, Number(filterGroup), studentId)
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `ReportCard_${name.replace(/\s+/g, '_')}.pdf`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Failed to download PDF')
+    } finally {
+      setDownloadingReport(null)
+    }
+  }
 
   const handlePrint = () => {
     const content = document.getElementById('marksheet-print-area')?.innerHTML
@@ -186,6 +208,7 @@ const ResultsPage: FC = () => {
                       <th style={{ minWidth: 80 }}>%</th>
                       <th style={{ minWidth: 80 }}>Grade</th>
                       <th style={{ minWidth: 70 }}>Result</th>
+                      <th className='text-end pe-4' style={{ minWidth: 100 }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -250,6 +273,20 @@ const ResultsPage: FC = () => {
                               {hasAbsent ? 'AB' : isPass ? 'PASS' : 'FAIL'}
                             </span>
                           </td>
+                          <td className='text-end pe-4'>
+                            <button
+                              className='btn btn-icon btn-sm btn-light-primary'
+                              title='Download Report Card PDF'
+                              disabled={downloadingReport === s.id}
+                              onClick={() => handleDownloadPdf(s.id, `${s.first_name} ${s.last_name}`)}
+                            >
+                              {downloadingReport === s.id ? (
+                                <span className='spinner-border spinner-border-sm'></span>
+                              ) : (
+                                <i className='ki-duotone ki-file-down fs-4'><span className='path1'></span><span className='path2'></span></i>
+                              )}
+                            </button>
+                          </td>
                         </tr>
                       )
                     })}
@@ -274,7 +311,7 @@ const ResultsPage: FC = () => {
                           ? ((students.reduce((s, st) => s + getStudentPct(st.id), 0)) / students.length).toFixed(1) + '%'
                           : '—'}
                       </td>
-                      <td colSpan={2}></td>
+                      <td colSpan={3}></td>
                     </tr>
                   </tfoot>
                 </table>

@@ -79,3 +79,6 @@ export const getExamResults = (schoolId: string | number, examId: number) =>
 // ─── Marksheet ────────────────────────────────────────────────────────────────
 export const getMarksheet = (schoolId: string | number, groupId: number, classId: number) =>
   axios.get<{ success: boolean; data: MarksheetData }>(`${BASE(schoolId)}/groups/${groupId}/marksheet?class_id=${classId}`)
+
+export const downloadStudentReportCardPdf = (schoolId: string | number, groupId: number, studentId: number) =>
+  axios.get(`${BASE(schoolId)}/groups/${groupId}/students/${studentId}/report-card/pdf`, { responseType: 'blob' })
