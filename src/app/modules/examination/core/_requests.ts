@@ -69,6 +69,9 @@ export const updateSchedule = (schoolId: string | number, groupId: number, sched
 export const deleteSchedule = (schoolId: string | number, groupId: number, scheduleId: number) =>
   axios.delete(`${BASE(schoolId)}/groups/${groupId}/schedule/${scheduleId}`)
 
+export const downloadSchedulePdf = (schoolId: string | number, groupId: number, sectionId: number) =>
+  axios.get(`${BASE(schoolId)}/groups/${groupId}/schedule/pdf?sectionId=${sectionId}`, { responseType: 'blob' })
+
 // ─── Marks Entry ──────────────────────────────────────────────────────────────
 export const bulkMarksEntry = (schoolId: string | number, examId: number, marks: MarkEntryPayload[]) =>
   axios.post<{ success: boolean; message: string; count: number }>(`${BASE(schoolId)}/results/bulk-entry`, { exam_id: examId, marks })

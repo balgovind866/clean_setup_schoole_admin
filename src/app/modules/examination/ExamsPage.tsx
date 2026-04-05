@@ -8,7 +8,7 @@ import {
   getGradeScales, createGradeScale, updateGradeScale, deleteGradeScale,
   getExamGroups, getGroupExams, createExamGroup, updateExamGroup, deleteExamGroup,
   assignClassesToGroup, addExamsToGroup, deleteExamSubject,
-  getGroupSchedule, createSchedule, deleteSchedule,
+  getGroupSchedule, createSchedule, deleteSchedule, downloadSchedulePdf,
   removeClassesFromGroup,
 } from './core/_requests'
 import { GradeScale, ExamGroup, ExamSubject, ExamSchedule } from './core/_models'
@@ -131,6 +131,23 @@ const ExamsPage: FC = () => {
   const [schedSectionId, setSchedSectionId] = useState<string>('')
   const [scheduleGrid, setScheduleGrid] = useState<Record<number, { date: string; start_time: string; end_time: string; room_no: string; invigilator_id: string }>>({})
   const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+
+  const handleDownloadSchedulePdf = async () => {
+    if (!selectedGroup || !schedSectionId) return
+    setDownloadingPdf(true)
+    try {
+      const res = await downloadSchedulePdf(schoolId, selectedGroup.id, Number(schedSectionId))
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ExamSchedule_Group${selectedGroup.id}_Section${schedSectionId}.pdf`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      alert('Failed to download PDF. Please try again.')
+    } finally { setDownloadingPdf(false) }
+  }
 
   const loadGroups = useCallback(async () => {
     if (!schoolId) return
@@ -633,10 +650,16 @@ const ExamsPage: FC = () => {
                                   ))}
                                 </select>
                               </div>
-                              <div className="col-md-4 text-end">
+                              <div className="col-md-2">
                                 <button className="btn btn-primary w-100" onClick={addSchedules} disabled={scheduleSaving || !schedSectionId}>
                                   {scheduleSaving ? <span className='spinner-border spinner-border-sm me-2' /> : <i className='ki-duotone ki-check fs-2'><span className="path1" /><span className="path2" /></i>}
-                                  Save Exam Schedule
+                                  Save Schedule
+                                </button>
+                              </div>
+                              <div className="col-md-2">
+                                <button className="btn btn-light-danger w-100" onClick={handleDownloadSchedulePdf} disabled={downloadingPdf || !schedSectionId} title="Download Exam Timetable PDF">
+                                  {downloadingPdf ? <span className='spinner-border spinner-border-sm me-2' /> : <i className='ki-duotone ki-file-down fs-2'><span className="path1" /><span className="path2" /></i>}
+                                  Download PDF
                                 </button>
                               </div>
                             </div>
