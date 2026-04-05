@@ -764,28 +764,18 @@ const TimetablePage: FC = () => {
                     }).length
 
                     return (
-                      <div key={day} className='mb-7'>
+                      <div key={day} className='mb-8'>
                         {/* Day header row */}
                         <div className='d-flex align-items-center mb-4'>
-                          <div
-                            className='rounded-pill px-5 py-2 fw-bold text-white fs-7 me-4'
-                            style={{
-                              background: 'linear-gradient(135deg, #3699FF, #187DE4)',
-                              minWidth: '120px',
-                              textAlign: 'center',
-                              letterSpacing: '0.5px',
-                            }}
-                          >
-                            {day}
-                          </div>
-                          <div className='flex-grow-1 border-top border-dashed border-gray-300' />
-                          <span className='ms-4 badge badge-light-primary fs-8 fw-semibold'>
-                            {filledCount} / {nonBreakSlots.length} filled
+                          <h4 className='text-primary fw-bolder text-uppercase mb-0 me-4 fs-3'>{day}</h4>
+                          <div className='flex-grow-1 border-top border-2 border-light-primary'></div>
+                          <span className='ms-4 text-muted fs-7 fw-semibold'>
+                            <span className='text-primary'>{filledCount}</span> / {nonBreakSlots.length} Assigned
                           </span>
                         </div>
 
                         {/* Period cards */}
-                        <div className='row g-3 ps-2'>
+                        <div className='row g-4'>
                           {slots.map(slot => {
                             const cell = getCell(day, slot.id)
                             const sub = subjectName(cell.subject_id)
@@ -797,25 +787,23 @@ const TimetablePage: FC = () => {
                             if (slot.is_break) {
                               return (
                                 <div key={slot.id} className='col-12'>
-                                  <div
-                                    className='d-flex align-items-center gap-3 px-4 py-2 rounded'
-                                    style={{ background: '#fff8dd', border: '1px dashed #ffc700' }}
-                                  >
-                                    <span className='badge badge-warning fw-bold fs-8 px-3'>BREAK</span>
-                                    <div>
-                                      <span className='fw-semibold text-gray-700 fs-7'>{slot.name}</span>
-                                      <span className='text-muted fs-8 ms-2'>
+                                  <div className='d-flex align-items-center bg-light-primary rounded border border-primary p-3'>
+                                    <span className='badge badge-primary me-4 px-3 py-2'>BREAK</span>
+                                    <div className='flex-grow-1'>
+                                      <div className='fw-bold text-gray-800'>{slot.name}</div>
+                                      <div className='text-primary fs-8 fw-semibold'>
                                         {fmtTime(slot.start_time)} – {fmtTime(slot.end_time)}
-                                      </span>
+                                      </div>
                                     </div>
-                                    <input
-                                      type='text'
-                                      className='form-control form-control-sm form-control-solid ms-auto'
-                                      style={{ maxWidth: '180px' }}
-                                      placeholder='Room / Location'
-                                      value={cell.room_no}
-                                      onChange={e => setCell(day, slot.id, { room_no: e.target.value })}
-                                    />
+                                    <div className='w-200px'>
+                                      <input
+                                        type='text'
+                                        className='form-control form-control-sm form-control-solid border-primary bg-white'
+                                        placeholder='Room / Location'
+                                        value={cell.room_no}
+                                        onChange={e => setCell(day, slot.id, { room_no: e.target.value })}
+                                      />
+                                    </div>
                                   </div>
                                 </div>
                               )
@@ -823,76 +811,43 @@ const TimetablePage: FC = () => {
 
                             /* ── Regular period card ── */
                             return (
-                              <div key={slot.id} className='col-12 col-md-6 col-xl-4 position-relative'>
+                              <div key={slot.id} className='col-12 col-md-4 col-lg-3 position-relative'>
                                 <div
-                                  className={`card h-100 cursor-pointer ${sub
-                                    ? 'border border-primary border-opacity-25'
-                                    : 'border border-dashed border-gray-300'
-                                    }`}
-                                  style={{
-                                    background: sub ? '#f1f4fa' : '#fafafa',
-                                    transition: 'box-shadow .15s ease',
-                                  }}
+                                  className={`card h-100 cursor-pointer border ${sub ? 'border-primary border-2 bg-light-primary bg-opacity-25' : 'border-gray-300 border-dashed bg-white'}`}
                                   onClick={() => setEditCell(isOpen ? null : { day, slotId: slot.id })}
-                                  onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 14px rgba(54,153,255,.18)')}
-                                  onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
                                 >
-                                  <div className='card-body py-3 px-4'>
-                                    {/* Period label + time */}
-                                    <div className='d-flex align-items-center justify-content-between mb-2'>
-                                      <div className='d-flex align-items-center gap-2'>
-                                        <span className='badge badge-primary fw-bold fs-9' style={{ minWidth: '24px' }}>
-                                          {periodNum}
-                                        </span>
-                                        <span className='fw-semibold text-gray-700 fs-7'>{slot.name}</span>
-                                      </div>
-                                      <span className='text-muted fs-8'>
-                                        {fmtTime(slot.start_time)} – {fmtTime(slot.end_time)}
-                                      </span>
+                                  <div className='card-body p-4'>
+                                    {/* Period Header */}
+                                    <div className='d-flex justify-content-between align-items-center border-bottom border-gray-200 pb-2 mb-3'>
+                                      <span className='fw-bold text-gray-600 fs-7'>P{periodNum} — {slot.name}</span>
+                                      <span className='text-muted fs-9'>{fmtTime(slot.start_time)}</span>
                                     </div>
 
-                                    {/* Filled */}
+                                    {/* Content */}
                                     {sub ? (
-                                      <>
-                                        <div className='fw-bold text-primary fs-6 mb-1'>{sub}</div>
-                                        {tchr && (
-                                          <div className='d-flex align-items-center text-gray-700 fs-8 mb-1'>
-                                            <i className='ki-duotone ki-profile-user fs-7 me-1'>
-                                              <span className='path1'></span><span className='path2'></span>
-                                              <span className='path3'></span><span className='path4'></span>
-                                            </i>
-                                            {tchr}
-                                          </div>
-                                        )}
-                                        {cell.room_no && (
-                                          <div className='d-flex align-items-center text-muted fs-8'>
-                                            <i className='ki-duotone ki-geolocation fs-7 me-1'>
-                                              <span className='path1'></span><span className='path2'></span>
-                                            </i>
-                                            {cell.room_no}
-                                          </div>
-                                        )}
+                                      <div className='position-relative py-1'>
+                                        <div className='fw-bolder text-primary fs-5 mb-1'>{sub}</div>
+                                        {tchr && <div className='text-gray-700 fs-7 fw-semibold'>{tchr}</div>}
+                                        {cell.room_no && <div className='text-muted fs-8 mt-1'>Room: {cell.room_no}</div>}
+                                        
                                         {/* Clear button */}
                                         <button
-                                          className='btn btn-icon btn-xs btn-light-danger position-absolute top-0 end-0 m-2'
-                                          style={{ width: '20px', height: '20px', minWidth: 'unset', padding: 0 }}
+                                          className='btn btn-icon btn-sm btn-color-gray-400 btn-active-color-danger position-absolute top-0 end-0 ms-auto'
+                                          style={{ width: '20px', height: '20px', padding: 0 }}
                                           onClick={e => {
                                             e.stopPropagation()
                                             setCell(day, slot.id, { subject_id: null, teacher_id: null, room_no: '' })
                                           }}
                                         >
-                                          <i className='ki-duotone ki-cross fs-9'>
+                                          <i className='ki-duotone ki-cross fs-2'>
                                             <span className='path1'></span><span className='path2'></span>
                                           </i>
                                         </button>
-                                      </>
+                                      </div>
                                     ) : (
-                                      /* Empty */
-                                      <div className='d-flex align-items-center gap-1 text-muted fs-8 mt-1'>
-                                        <i className='ki-duotone ki-plus-circle fs-7'>
-                                          <span className='path1'></span><span className='path2'></span>
-                                        </i>
-                                        Click to assign
+                                      /* Empty State */
+                                      <div className='text-center py-4 text-primary fs-7 opacity-50'>
+                                        + Assign Subject
                                       </div>
                                     )}
                                   </div>
