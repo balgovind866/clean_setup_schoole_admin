@@ -65,6 +65,91 @@ function emptyEdits(slots: PeriodSlot[]): EditsMap {
 }
 
 /* ===========================================================================
+   Cell Editor Popup — reused in both Grid and List views
+=========================================================================== */
+interface CellEditorProps {
+  day: DayOfWeek
+  slotId: number
+  cell: CellData
+  classSubjects: ClassSubjectMappingModel[]
+  subjects: SubjectModel[]
+  teachers: any[]
+  onSetCell: (day: DayOfWeek, slotId: number, patch: Partial<CellData>) => void
+  onClose: () => void
+}
+
+const CellEditorPopup: FC<CellEditorProps> = ({
+  day, slotId, cell, classSubjects, subjects, teachers, onSetCell, onClose,
+}) => (
+  <div
+    className='card shadow position-absolute start-0 top-100 z-index-3 p-4'
+    style={{ minWidth: '260px', zIndex: 999, border: '1px solid #ddd' }}
+  >
+    <div className='mb-3'>
+      <div className='d-flex align-items-center justify-content-between mb-1'>
+        <label className='form-label fw-semibold fs-7 mb-0'>Subject</label>
+        {classSubjects.length > 0 && (
+          <span className='badge badge-light-primary fs-9 py-1 px-2'>
+            {classSubjects.length} mapped
+          </span>
+        )}
+      </div>
+      <select
+        className='form-select form-select-sm form-select-solid'
+        value={cell.subject_id || ''}
+        onChange={e => onSetCell(day, slotId, { subject_id: e.target.value ? Number(e.target.value) : null })}
+      >
+        <option value=''>— Select Subject —</option>
+        {(classSubjects.length > 0
+          ? classSubjects.map(cs => cs.subject).filter(Boolean)
+          : subjects
+        ).map(s => s && (
+          <option key={s.id} value={s.id}>
+            {s.name} {s.code ? `(${s.code})` : ''}
+          </option>
+        ))}
+      </select>
+    </div>
+    <div className='mb-3'>
+      <div className='d-flex align-items-center justify-content-between mb-1'>
+        <label className='form-label fw-semibold fs-7 mb-0'>Teacher</label>
+        {cell.teacher_id && cell.subject_id && (
+          <span className='badge badge-light-success fs-9 py-1 px-2'>
+            <i className='ki-duotone ki-check fs-9 me-1'><span className='path1'></span><span className='path2'></span></i>
+            Auto-filled
+          </span>
+        )}
+      </div>
+      <select
+        className='form-select form-select-sm form-select-solid'
+        value={cell.teacher_id || ''}
+        onChange={e => onSetCell(day, slotId, { teacher_id: e.target.value ? Number(e.target.value) : null })}
+      >
+        <option value=''>No Teacher</option>
+        {teachers.map((t: any) => (
+          <option key={t.id} value={t.id}>
+            {t.name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || `Teacher #${t.id}`}
+          </option>
+        ))}
+      </select>
+    </div>
+    <div className='mb-3'>
+      <label className='form-label fw-semibold fs-7 mb-1'>Room No.</label>
+      <input
+        type='text'
+        className='form-control form-control-sm form-control-solid'
+        placeholder='e.g. A-101'
+        value={cell.room_no}
+        onChange={e => onSetCell(day, slotId, { room_no: e.target.value })}
+      />
+    </div>
+    <button className='btn btn-primary btn-sm w-100' onClick={onClose}>
+      Done
+    </button>
+  </div>
+)
+
+/* ===========================================================================
    Main Component
 =========================================================================== */
 const TimetablePage: FC = () => {
@@ -78,9 +163,7 @@ const TimetablePage: FC = () => {
   const [subjects, setSubjects] = useState<SubjectModel[]>([])
   const [teachers, setTeachers] = useState<any[]>([])
   const [slots, setSlots] = useState<PeriodSlot[]>([])
-  // Subjects mapped to this class (filtered for cell popup)
   const [classSubjects, setClassSubjects] = useState<ClassSubjectMappingModel[]>([])
-  // subject_id → teacher_id mapping for this class section
   const [allocations, setAllocations] = useState<TeacherAllocationModel[]>([])
 
   // ── Filter state ─────────────────────────────────────────────────────────────
@@ -89,10 +172,11 @@ const TimetablePage: FC = () => {
   const [sectionId, setSectionId] = useState<number>(0)
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().split('T')[0])
 
-  // ── Grid / Version state ─────────────────────────────────────────────────────
+  // ── Grid / Version / View state ──────────────────────────────────────────────
   const [edits, setEdits] = useState<EditsMap>({} as EditsMap)
   const [versions, setVersions] = useState<TimetableVersion[]>([])
   const [activeTab, setActiveTab] = useState<'grid' | 'versions'>('grid')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
   // ── Loading flags ────────────────────────────────────────────────────────────
   const [loadingGrid, setLoadingGrid] = useState(false)
@@ -120,7 +204,7 @@ const TimetablePage: FC = () => {
       if (classRes.data.success) setClasses(classRes.data.data.classes || [])
       if (subRes.data.success) setSubjects(subRes.data.data.subjects || [])
       if (teachRes.data.success) setTeachers(teachRes.data.data?.teachers || teachRes.data.data || [])
-    }).catch(() => {})
+    }).catch(() => { })
   }, [schoolId])
 
   /* ---------- Load sections + class subjects when class changes ---------- */
@@ -135,7 +219,7 @@ const TimetablePage: FC = () => {
     ]).then(([secRes, subRes]) => {
       if (secRes.data.success) setSections(secRes.data.data.sections || [])
       if (subRes.data.success) setClassSubjects(subRes.data.data.subjects || [])
-    }).catch(() => {})
+    }).catch(() => { })
   }, [schoolId, classId])
 
   /* ---------- Load period slots when session changes ---------- */
@@ -149,7 +233,7 @@ const TimetablePage: FC = () => {
           setEdits(emptyEdits(s))
         }
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [schoolId, sessionId])
 
   /* ---------- Fetch timetable grid ---------- */
@@ -182,7 +266,7 @@ const TimetablePage: FC = () => {
     try {
       const res = await getTimetableVersions(schoolId, sectionId, sessionId)
       if (res.data.success) setVersions(res.data.data || [])
-    } catch {}
+    } catch { }
   }, [schoolId, sectionId, sessionId])
 
   /* ---------- Load teacher allocations when section/session changes ---------- */
@@ -190,7 +274,7 @@ const TimetablePage: FC = () => {
     if (!schoolId || !sectionId || !sessionId) { setAllocations([]); return }
     getTeacherAllocations(schoolId, { class_section_id: sectionId, academic_session_id: sessionId })
       .then(res => { if (res.data.success) setAllocations(res.data.data || []) })
-      .catch(() => {})
+      .catch(() => { })
   }, [schoolId, sectionId, sessionId])
 
   /* ---------- Auto-load when filters are complete ---------- */
@@ -212,7 +296,6 @@ const TimetablePage: FC = () => {
       slots.forEach(slot => {
         const cell = edits[day]?.[slot.id]
         if (cell) {
-          // ONLY include if at least one field is filled
           const isFilled = cell.subject_id || cell.teacher_id || (cell.room_no && cell.room_no.trim() !== '')
           if (isFilled) {
             entries.push({
@@ -236,9 +319,9 @@ const TimetablePage: FC = () => {
         entries,
       })
       if (res.data.success) {
-        toast.success(`✅ Timetable draft saved! (Version #${res.data.data.version_id}) — Go to Versions tab to publish.`)
+        toast.success(`✅ Timetable draft saved successfully! Version #${res.data.data.version_id} created.`)
         fetchVersions()
-        // Stay on grid tab — user can switch manually
+        setActiveTab('versions')
       }
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Save failed — check console for details')
@@ -269,53 +352,32 @@ const TimetablePage: FC = () => {
 
   /* ---------- Cell edit helpers ---------- */
   const setCell = async (day: DayOfWeek, slotId: number, patch: Partial<CellData>) => {
-    // If subject changed → auto-fetch teacher via by-subject API
     if ('subject_id' in patch && patch.subject_id) {
-      // Optimistic update first
       setEdits(prev => {
         const current = prev[day]?.[slotId] || { subject_id: null, teacher_id: null, room_no: '' }
-        return {
-          ...prev,
-          [day]: { ...prev[day], [slotId]: { ...current, ...patch } },
-        }
+        return { ...prev, [day]: { ...prev[day], [slotId]: { ...current, ...patch } } }
       })
-
-      // Then fetch the mapped teacher for this subject + session
       try {
         const res = await getTeacherBySubject(schoolId, patch.subject_id, sessionId)
         if (res.data.success && res.data.data.length > 0) {
-          // Find the teacher whose allocation includes current class_section_id
           const matched = res.data.data.find(t =>
             t.classes.some(c => c.class_section_id === sectionId)
           )
           const teacherId = matched?.teacher_id || res.data.data[0]?.teacher_id || null
-
           if (teacherId) {
             setEdits(prev => {
               const current = prev[day]?.[slotId] || { subject_id: null, teacher_id: null, room_no: '' }
-              return {
-                ...prev,
-                [day]: { ...prev[day], [slotId]: { ...current, teacher_id: teacherId } },
-              }
+              return { ...prev, [day]: { ...prev[day], [slotId]: { ...current, teacher_id: teacherId } } }
             })
           }
         }
-      } catch {
-        // silently ignore — teacher dropdown still manually editable
-      }
+      } catch { }
     } else {
-      // For non-subject patches (teacher, room_no) or subject clear
       setEdits(prev => {
         const current = prev[day]?.[slotId] || { subject_id: null, teacher_id: null, room_no: '' }
         const updated = { ...current, ...patch }
-        // Clear teacher if subject is explicitly cleared
-        if ('subject_id' in patch && !patch.subject_id) {
-          updated.teacher_id = null
-        }
-        return {
-          ...prev,
-          [day]: { ...prev[day], [slotId]: updated },
-        }
+        if ('subject_id' in patch && !patch.subject_id) updated.teacher_id = null
+        return { ...prev, [day]: { ...prev[day], [slotId]: updated } }
       })
     }
   }
@@ -332,6 +394,7 @@ const TimetablePage: FC = () => {
 
   const subjectName = (id: number | null) =>
     id ? (subjects.find(s => s.id === id)?.name || `Sub #${id}`) : null
+
   const teacherName = (id: number | null) => {
     if (!id) return null
     const t = teachers.find((t: any) => t.id === id)
@@ -344,6 +407,8 @@ const TimetablePage: FC = () => {
     if (cls && sec) return `${cls.name} - ${sec.section?.name || ''}`
     return ''
   }
+
+  const nonBreakSlots = slots.filter(s => !s.is_break)
 
   /* =========================================================================
      RENDER
@@ -437,7 +502,8 @@ const TimetablePage: FC = () => {
 
         {/* ── Main Card ───────────────────────────────────────────────────── */}
         <div className='card'>
-          {/* Card Header with Tabs */}
+
+          {/* ── Card Header with Tabs + View Toggle ─────────────────────── */}
           <div className='card-header card-header-stretch border-bottom'>
             <div className='card-title'>
               <h3 className='fw-bold'>
@@ -448,14 +514,18 @@ const TimetablePage: FC = () => {
                 )}
               </h3>
             </div>
-            <div className='card-toolbar'>
+            <div className='card-toolbar d-flex align-items-center gap-3'>
+              {/* Nav Tabs */}
               <ul className='nav nav-tabs nav-line-tabs nav-stretch fs-6 border-0'>
                 <li className='nav-item'>
                   <a
                     className={`nav-link text-active-primary cursor-pointer px-4 ${activeTab === 'grid' ? 'active' : ''}`}
                     onClick={() => setActiveTab('grid')}
                   >
-                    <i className='ki-duotone ki-calendar-2 fs-5 me-1'><span className='path1'></span><span className='path2'></span><span className='path3'></span><span className='path4'></span><span className='path5'></span></i>
+                    <i className='ki-duotone ki-calendar-2 fs-5 me-1'>
+                      <span className='path1'></span><span className='path2'></span>
+                      <span className='path3'></span><span className='path4'></span><span className='path5'></span>
+                    </i>
                     Timetable Grid
                   </a>
                 </li>
@@ -464,7 +534,9 @@ const TimetablePage: FC = () => {
                     className={`nav-link text-active-primary cursor-pointer px-4 ${activeTab === 'versions' ? 'active' : ''}`}
                     onClick={() => { setActiveTab('versions'); if (sectionId) fetchVersions() }}
                   >
-                    <i className='ki-duotone ki-archive fs-5 me-1'><span className='path1'></span><span className='path2'></span></i>
+                    <i className='ki-duotone ki-archive fs-5 me-1'>
+                      <span className='path1'></span><span className='path2'></span>
+                    </i>
                     Versions & Publishing
                     {versions.length > 0 && (
                       <span className='badge badge-circle badge-primary ms-2 badge-sm'>
@@ -474,12 +546,44 @@ const TimetablePage: FC = () => {
                   </a>
                 </li>
               </ul>
+
+              {/* Grid / List toggle — only show on grid tab when data is loaded */}
+              {activeTab === 'grid' && sectionId && slots.length > 0 && (
+                <div className='d-flex align-items-center border-start ps-4'>
+                  <span className='text-muted fs-8 me-2 fw-semibold'>View:</span>
+                  <div className='btn-group btn-group-sm'>
+                    <button
+                      className={`btn btn-icon btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-light'}`}
+                      title='Grid View'
+                      onClick={() => setViewMode('grid')}
+                    >
+                      <i className='ki-duotone ki-element-11 fs-5'>
+                        <span className='path1'></span><span className='path2'></span>
+                        <span className='path3'></span><span className='path4'></span>
+                      </i>
+                    </button>
+                    <button
+                      className={`btn btn-icon btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-light'}`}
+                      title='List View'
+                      onClick={() => setViewMode('list')}
+                    >
+                      <i className='ki-duotone ki-row-horizontal fs-5'>
+                        <span className='path1'></span><span className='path2'></span>
+                      </i>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* ─── GRID TAB ─────────────────────────────────────────────────── */}
+          {/* ═══════════════════════════════════════════════════════════════
+              GRID TAB
+          ═══════════════════════════════════════════════════════════════ */}
           {activeTab === 'grid' && (
             <div className='card-body p-0'>
+
+              {/* Empty state — no section selected */}
               {!sectionId ? (
                 <div className='text-center py-20'>
                   <i className='ki-duotone ki-calendar-2 fs-5x text-gray-200 mb-5 d-block'>
@@ -488,6 +592,7 @@ const TimetablePage: FC = () => {
                   </i>
                   <p className='text-muted fs-5'>Select a Class & Section to view or edit the timetable.</p>
                 </div>
+
               ) : slots.length === 0 ? (
                 <div className='text-center py-20'>
                   <i className='ki-duotone ki-time fs-5x text-gray-200 mb-5 d-block'>
@@ -496,12 +601,18 @@ const TimetablePage: FC = () => {
                   <p className='text-muted fs-5'>No period slots found for this session.</p>
                   <p className='text-muted fs-6'>Go to <strong>Periods</strong> section to create slots first.</p>
                 </div>
-              ) : (
+
+              ) : viewMode === 'grid' ? (
+                /* ─────────────────────────────────────────────────────────
+                   GRID VIEW
+                ───────────────────────────────────────────────────────── */
                 <div className='table-responsive'>
-                  <table className='table table-bordered table-row-dashed align-middle gs-0 gy-0 mb-0' style={{ minWidth: '900px' }}>
+                  <table
+                    className='table table-bordered table-row-dashed align-middle gs-0 gy-0 mb-0'
+                    style={{ minWidth: '900px' }}
+                  >
                     <thead>
                       <tr className='fw-bold fs-7 text-uppercase text-gray-600 bg-light'>
-                        {/* Period column header */}
                         <th
                           className='text-center border-end fw-bold text-gray-700 ps-4'
                           style={{ minWidth: '130px', position: 'sticky', left: 0, background: '#f5f8fa', zIndex: 2 }}
@@ -570,7 +681,7 @@ const TimetablePage: FC = () => {
                                 className='border-start py-2 px-2 position-relative'
                                 style={{ verticalAlign: 'top', minHeight: '80px' }}
                               >
-                                {/* Filled cell display */}
+                                {/* Filled cell */}
                                 {sub ? (
                                   <div
                                     className='rounded p-2 cursor-pointer h-100'
@@ -578,17 +689,38 @@ const TimetablePage: FC = () => {
                                     onClick={() => setEditCell(isOpen ? null : { day, slotId: slot.id })}
                                   >
                                     <div className='fw-bold text-primary fs-7 mb-1'>{sub}</div>
-                                    {tchr && <div className='text-gray-700 fs-8'><i className='ki-duotone ki-profile-user fs-8 me-1'><span className='path1'></span><span className='path2'></span><span className='path3'></span><span className='path4'></span></i>{tchr}</div>}
-                                    {cell.room_no && <div className='text-muted fs-8 mt-1'><i className='ki-duotone ki-geolocation fs-8 me-1'><span className='path1'></span><span className='path2'></span></i>{cell.room_no}</div>}
+                                    {tchr && (
+                                      <div className='text-gray-700 fs-8'>
+                                        <i className='ki-duotone ki-profile-user fs-8 me-1'>
+                                          <span className='path1'></span><span className='path2'></span>
+                                          <span className='path3'></span><span className='path4'></span>
+                                        </i>
+                                        {tchr}
+                                      </div>
+                                    )}
+                                    {cell.room_no && (
+                                      <div className='text-muted fs-8 mt-1'>
+                                        <i className='ki-duotone ki-geolocation fs-8 me-1'>
+                                          <span className='path1'></span><span className='path2'></span>
+                                        </i>
+                                        {cell.room_no}
+                                      </div>
+                                    )}
                                     <button
                                       className='btn btn-icon btn-xs btn-light-danger position-absolute top-0 end-0 m-1'
                                       style={{ width: '18px', height: '18px', minWidth: 'unset', padding: 0 }}
-                                      onClick={e => { e.stopPropagation(); setCell(day, slot.id, { subject_id: null, teacher_id: null, room_no: '' }) }}
+                                      onClick={e => {
+                                        e.stopPropagation()
+                                        setCell(day, slot.id, { subject_id: null, teacher_id: null, room_no: '' })
+                                      }}
                                     >
-                                      <i className='ki-duotone ki-cross fs-9'><span className='path1'></span><span className='path2'></span></i>
+                                      <i className='ki-duotone ki-cross fs-9'>
+                                        <span className='path1'></span><span className='path2'></span>
+                                      </i>
                                     </button>
                                   </div>
                                 ) : (
+                                  /* Empty cell */
                                   <div
                                     className='rounded d-flex align-items-center justify-content-center cursor-pointer text-muted'
                                     style={{ minHeight: '72px', border: '1px dashed #d1d9e6', background: '#fafafa' }}
@@ -598,77 +730,18 @@ const TimetablePage: FC = () => {
                                   </div>
                                 )}
 
-                                {/* Cell editor popup */}
+                                {/* Popup editor */}
                                 {isOpen && (
-                                  <div
-                                    className='card shadow position-absolute start-0 top-100 z-index-3 p-4'
-                                    style={{ minWidth: '260px', zIndex: 999, border: '1px solid #ddd' }}
-                                  >
-                                    <div className='mb-3'>
-                                      <div className='d-flex align-items-center justify-content-between mb-1'>
-                                        <label className='form-label fw-semibold fs-7 mb-0'>Subject</label>
-                                        {classSubjects.length > 0 && (
-                                          <span className='badge badge-light-primary fs-9 py-1 px-2'>
-                                            {classSubjects.length} mapped
-                                          </span>
-                                        )}
-                                      </div>
-                                      <select
-                                        className='form-select form-select-sm form-select-solid'
-                                        value={cell.subject_id || ''}
-                                        onChange={e => setCell(day, slot.id, { subject_id: e.target.value ? Number(e.target.value) : null })}
-                                      >
-                                        <option value=''>— Select Subject —</option>
-                                        {(classSubjects.length > 0
-                                          ? classSubjects.map(cs => cs.subject).filter(Boolean)
-                                          : subjects
-                                        ).map(s => s && (
-                                          <option key={s.id} value={s.id}>
-                                            {s.name} {s.code ? `(${s.code})` : ''}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                    <div className='mb-3'>
-                                      <div className='d-flex align-items-center justify-content-between mb-1'>
-                                        <label className='form-label fw-semibold fs-7 mb-0'>Teacher</label>
-                                        {cell.teacher_id && cell.subject_id && (
-                                          <span className='badge badge-light-success fs-9 py-1 px-2'>
-                                            <i className='ki-duotone ki-check fs-9 me-1'><span className='path1'></span><span className='path2'></span></i>
-                                            Auto-filled
-                                          </span>
-                                        )}
-                                      </div>
-                                      <select
-                                        className='form-select form-select-sm form-select-solid'
-                                        value={cell.teacher_id || ''}
-                                        onChange={e => setCell(day, slot.id, { teacher_id: e.target.value ? Number(e.target.value) : null })}
-                                      >
-                                        <option value=''>No Teacher</option>
-                                        {teachers.map((t: any) => (
-                                          <option key={t.id} value={t.id}>
-                                            {t.name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || `Teacher #${t.id}`}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                    <div className='mb-3'>
-                                      <label className='form-label fw-semibold fs-7 mb-1'>Room No.</label>
-                                      <input
-                                        type='text'
-                                        className='form-control form-control-sm form-control-solid'
-                                        placeholder='e.g. A-101'
-                                        value={cell.room_no}
-                                        onChange={e => setCell(day, slot.id, { room_no: e.target.value })}
-                                      />
-                                    </div>
-                                    <button
-                                      className='btn btn-primary btn-sm w-100'
-                                      onClick={() => setEditCell(null)}
-                                    >
-                                      Done
-                                    </button>
-                                  </div>
+                                  <CellEditorPopup
+                                    day={day}
+                                    slotId={slot.id}
+                                    cell={cell}
+                                    classSubjects={classSubjects}
+                                    subjects={subjects}
+                                    teachers={teachers}
+                                    onSetCell={setCell}
+                                    onClose={() => setEditCell(null)}
+                                  />
                                 )}
                               </td>
                             )
@@ -678,13 +751,183 @@ const TimetablePage: FC = () => {
                     </tbody>
                   </table>
                 </div>
+
+              ) : (
+                /* ─────────────────────────────────────────────────────────
+                   LIST VIEW — day-wise accordion with period cards
+                ───────────────────────────────────────────────────────── */
+                <div className='p-6'>
+                  {ALL_DAYS.map(day => {
+                    const filledCount = slots.filter(slot => {
+                      const cell = getCell(day, slot.id)
+                      return !slot.is_break && (cell.subject_id || (cell.room_no && cell.room_no.trim()))
+                    }).length
+
+                    return (
+                      <div key={day} className='mb-7'>
+                        {/* Day header row */}
+                        <div className='d-flex align-items-center mb-4'>
+                          <div
+                            className='rounded-pill px-5 py-2 fw-bold text-white fs-7 me-4'
+                            style={{
+                              background: 'linear-gradient(135deg, #3699FF, #187DE4)',
+                              minWidth: '120px',
+                              textAlign: 'center',
+                              letterSpacing: '0.5px',
+                            }}
+                          >
+                            {day}
+                          </div>
+                          <div className='flex-grow-1 border-top border-dashed border-gray-300' />
+                          <span className='ms-4 badge badge-light-primary fs-8 fw-semibold'>
+                            {filledCount} / {nonBreakSlots.length} filled
+                          </span>
+                        </div>
+
+                        {/* Period cards */}
+                        <div className='row g-3 ps-2'>
+                          {slots.map(slot => {
+                            const cell = getCell(day, slot.id)
+                            const sub = subjectName(cell.subject_id)
+                            const tchr = teacherName(cell.teacher_id)
+                            const isOpen = editCell?.day === day && editCell?.slotId === slot.id
+                            const periodNum = nonBreakSlots.indexOf(slot) + 1
+
+                            /* ── Break slot ── */
+                            if (slot.is_break) {
+                              return (
+                                <div key={slot.id} className='col-12'>
+                                  <div
+                                    className='d-flex align-items-center gap-3 px-4 py-2 rounded'
+                                    style={{ background: '#fff8dd', border: '1px dashed #ffc700' }}
+                                  >
+                                    <span className='badge badge-warning fw-bold fs-8 px-3'>BREAK</span>
+                                    <div>
+                                      <span className='fw-semibold text-gray-700 fs-7'>{slot.name}</span>
+                                      <span className='text-muted fs-8 ms-2'>
+                                        {fmtTime(slot.start_time)} – {fmtTime(slot.end_time)}
+                                      </span>
+                                    </div>
+                                    <input
+                                      type='text'
+                                      className='form-control form-control-sm form-control-solid ms-auto'
+                                      style={{ maxWidth: '180px' }}
+                                      placeholder='Room / Location'
+                                      value={cell.room_no}
+                                      onChange={e => setCell(day, slot.id, { room_no: e.target.value })}
+                                    />
+                                  </div>
+                                </div>
+                              )
+                            }
+
+                            /* ── Regular period card ── */
+                            return (
+                              <div key={slot.id} className='col-12 col-md-6 col-xl-4 position-relative'>
+                                <div
+                                  className={`card h-100 cursor-pointer ${sub
+                                    ? 'border border-primary border-opacity-25'
+                                    : 'border border-dashed border-gray-300'
+                                    }`}
+                                  style={{
+                                    background: sub ? '#f1f4fa' : '#fafafa',
+                                    transition: 'box-shadow .15s ease',
+                                  }}
+                                  onClick={() => setEditCell(isOpen ? null : { day, slotId: slot.id })}
+                                  onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 14px rgba(54,153,255,.18)')}
+                                  onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
+                                >
+                                  <div className='card-body py-3 px-4'>
+                                    {/* Period label + time */}
+                                    <div className='d-flex align-items-center justify-content-between mb-2'>
+                                      <div className='d-flex align-items-center gap-2'>
+                                        <span className='badge badge-primary fw-bold fs-9' style={{ minWidth: '24px' }}>
+                                          {periodNum}
+                                        </span>
+                                        <span className='fw-semibold text-gray-700 fs-7'>{slot.name}</span>
+                                      </div>
+                                      <span className='text-muted fs-8'>
+                                        {fmtTime(slot.start_time)} – {fmtTime(slot.end_time)}
+                                      </span>
+                                    </div>
+
+                                    {/* Filled */}
+                                    {sub ? (
+                                      <>
+                                        <div className='fw-bold text-primary fs-6 mb-1'>{sub}</div>
+                                        {tchr && (
+                                          <div className='d-flex align-items-center text-gray-700 fs-8 mb-1'>
+                                            <i className='ki-duotone ki-profile-user fs-7 me-1'>
+                                              <span className='path1'></span><span className='path2'></span>
+                                              <span className='path3'></span><span className='path4'></span>
+                                            </i>
+                                            {tchr}
+                                          </div>
+                                        )}
+                                        {cell.room_no && (
+                                          <div className='d-flex align-items-center text-muted fs-8'>
+                                            <i className='ki-duotone ki-geolocation fs-7 me-1'>
+                                              <span className='path1'></span><span className='path2'></span>
+                                            </i>
+                                            {cell.room_no}
+                                          </div>
+                                        )}
+                                        {/* Clear button */}
+                                        <button
+                                          className='btn btn-icon btn-xs btn-light-danger position-absolute top-0 end-0 m-2'
+                                          style={{ width: '20px', height: '20px', minWidth: 'unset', padding: 0 }}
+                                          onClick={e => {
+                                            e.stopPropagation()
+                                            setCell(day, slot.id, { subject_id: null, teacher_id: null, room_no: '' })
+                                          }}
+                                        >
+                                          <i className='ki-duotone ki-cross fs-9'>
+                                            <span className='path1'></span><span className='path2'></span>
+                                          </i>
+                                        </button>
+                                      </>
+                                    ) : (
+                                      /* Empty */
+                                      <div className='d-flex align-items-center gap-1 text-muted fs-8 mt-1'>
+                                        <i className='ki-duotone ki-plus-circle fs-7'>
+                                          <span className='path1'></span><span className='path2'></span>
+                                        </i>
+                                        Click to assign
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Popup editor */}
+                                {isOpen && (
+                                  <CellEditorPopup
+                                    day={day}
+                                    slotId={slot.id}
+                                    cell={cell}
+                                    classSubjects={classSubjects}
+                                    subjects={subjects}
+                                    teachers={teachers}
+                                    onSetCell={setCell}
+                                    onClose={() => setEditCell(null)}
+                                  />
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               )}
 
-              {/* Save Footer */}
+              {/* ── Save Footer (grid tab, section selected, slots exist) ── */}
               {sectionId && slots.length > 0 && (
                 <div className='card-footer d-flex justify-content-between align-items-center'>
                   <span className='text-muted fs-7'>
-                    <i className='ki-duotone ki-information fs-4 me-1 text-warning'><span className='path1'></span><span className='path2'></span><span className='path3'></span></i>
+                    <i className='ki-duotone ki-information fs-4 me-1 text-warning'>
+                      <span className='path1'></span><span className='path2'></span><span className='path3'></span>
+                    </i>
                     Click any cell to assign Subject / Teacher. Save as Draft, then Publish from the <strong>Versions</strong> tab.
                   </span>
                   <div className='d-flex gap-3'>
@@ -692,7 +935,9 @@ const TimetablePage: FC = () => {
                       Reset
                     </button>
                     <button className='btn btn-success btn-sm' onClick={handleSave} disabled={saving}>
-                      {saving ? <><span className='spinner-border spinner-border-sm me-2'></span>Saving...</> : 'Save Draft'}
+                      {saving
+                        ? <><span className='spinner-border spinner-border-sm me-2'></span>Saving...</>
+                        : 'Save Draft'}
                     </button>
                   </div>
                 </div>
@@ -700,7 +945,9 @@ const TimetablePage: FC = () => {
             </div>
           )}
 
-          {/* ─── VERSIONS TAB ─────────────────────────────────────────────── */}
+          {/* ═══════════════════════════════════════════════════════════════
+              VERSIONS TAB
+          ═══════════════════════════════════════════════════════════════ */}
           {activeTab === 'versions' && (
             <div className='card-body'>
               {!sectionId ? (
@@ -713,7 +960,9 @@ const TimetablePage: FC = () => {
                     <span className='path1'></span><span className='path2'></span>
                   </i>
                   <p className='text-muted fs-5'>No timetable versions yet.</p>
-                  <p className='text-muted fs-6'>Go to the <strong>Grid</strong> tab, fill in the timetable, and <strong>Save Draft</strong>.</p>
+                  <p className='text-muted fs-6'>
+                    Go to the <strong>Grid</strong> tab, fill in the timetable, and <strong>Save Draft</strong>.
+                  </p>
                 </div>
               ) : (
                 <div className='table-responsive'>
@@ -736,18 +985,22 @@ const TimetablePage: FC = () => {
                           </td>
                           <td>
                             {new Date(v.effective_from).toLocaleDateString('en-GB', {
-                              day: '2-digit', month: 'short', year: 'numeric'
+                              day: '2-digit', month: 'short', year: 'numeric',
                             })}
                           </td>
                           <td>
                             {v.is_active ? (
                               <span className='badge badge-light-success fw-bold'>
-                                <i className='ki-duotone ki-check-circle fs-6 me-1'><span className='path1'></span><span className='path2'></span></i>
+                                <i className='ki-duotone ki-check-circle fs-6 me-1'>
+                                  <span className='path1'></span><span className='path2'></span>
+                                </i>
                                 Published
                               </span>
                             ) : (
                               <span className='badge badge-light-warning fw-bold'>
-                                <i className='ki-duotone ki-time fs-6 me-1'><span className='path1'></span><span className='path2'></span></i>
+                                <i className='ki-duotone ki-time fs-6 me-1'>
+                                  <span className='path1'></span><span className='path2'></span>
+                                </i>
                                 Draft
                               </span>
                             )}
@@ -759,7 +1012,7 @@ const TimetablePage: FC = () => {
                           </td>
                           <td>
                             {new Date(v.createdAt).toLocaleDateString('en-GB', {
-                              day: '2-digit', month: 'short', year: 'numeric'
+                              day: '2-digit', month: 'short', year: 'numeric',
                             })}
                           </td>
                           <td className='text-end'>
@@ -771,9 +1024,19 @@ const TimetablePage: FC = () => {
                               {publishing === v.id ? (
                                 <span className='spinner-border spinner-border-sm me-1'></span>
                               ) : v.is_active ? (
-                                <><i className='ki-duotone ki-cross-circle fs-5 me-1'><span className='path1'></span><span className='path2'></span></i>Unpublish</>
+                                <>
+                                  <i className='ki-duotone ki-cross-circle fs-5 me-1'>
+                                    <span className='path1'></span><span className='path2'></span>
+                                  </i>
+                                  Unpublish
+                                </>
                               ) : (
-                                <><i className='ki-duotone ki-send fs-5 me-1'><span className='path1'></span><span className='path2'></span></i>Publish</>
+                                <>
+                                  <i className='ki-duotone ki-send fs-5 me-1'>
+                                    <span className='path1'></span><span className='path2'></span>
+                                  </i>
+                                  Publish
+                                </>
                               )}
                             </button>
                           </td>
@@ -785,8 +1048,8 @@ const TimetablePage: FC = () => {
               )}
             </div>
           )}
-        </div>
 
+        </div>
       </Content>
     </>
   )
