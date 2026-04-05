@@ -13,6 +13,7 @@ import {
 } from './core/_requests'
 import { GradeScale, ExamGroup, ExamSubject, ExamSchedule } from './core/_models'
 import { getAcademicSessions, getClasses, getClassSections, getSubjects } from '../academic/core/_requests'
+import { getTeachers } from '../teachers/core/_requests'
 
 const STATUS_COLOR: Record<string, string> = {
   DRAFT: 'warning', PUBLISHED: 'success', COMPLETED: 'primary',
@@ -28,18 +29,21 @@ const ExamsPage: FC = () => {
   const [sessions, setSessions] = useState<any[]>([])
   const [classes, setClasses] = useState<any[]>([])
   const [allSubjects, setAllSubjects] = useState<any[]>([])
+  const [teachers, setTeachers] = useState<any[]>([])
 
   const loadMeta = useCallback(async () => {
     if (!schoolId) return
     try {
-      const [sRes, cRes, subRes] = await Promise.all([
+      const [sRes, cRes, subRes, tRes] = await Promise.all([
         getAcademicSessions(schoolId, 1, 100),
         getClasses(schoolId, 1, 100),
         getSubjects(schoolId),
+        getTeachers(schoolId, { page: 1, limit: 1000 })
       ])
       if (sRes.data.success) setSessions(sRes.data.data.sessions || [])
       if (cRes.data.success) setClasses(cRes.data.data.classes || [])
       if ((subRes.data as any).success) setAllSubjects((subRes.data as any).data?.subjects || (subRes.data as any).data || [])
+      if (tRes.data.success) setTeachers(tRes.data.data?.teachers || tRes.data.data || [])
     } catch { }
   }, [schoolId])
 
@@ -47,8 +51,8 @@ const ExamsPage: FC = () => {
   const [grades, setGrades] = useState<GradeScale[]>([])
   const [gradeModal, setGradeModal] = useState(false)
   const [editGrade, setEditGrade] = useState<GradeScale | null>(null)
-  const [gradeForm, setGradeForm] = useState({
-    exam_type: 'SCHOOL' as const, grade_name: '', min_percentage: '', max_percentage: '', grade_point: '', description: ''
+  const [gradeForm, setGradeForm] = useState<{ exam_type: 'SCHOOL' | 'BOARD', grade_name: string, min_percentage: string, max_percentage: string, grade_point: string, description: string }>({
+    exam_type: 'SCHOOL', grade_name: '', min_percentage: '', max_percentage: '', grade_point: '', description: ''
   })
   const [gradeSaving, setGradeSaving] = useState(false)
 
@@ -104,7 +108,7 @@ const ExamsPage: FC = () => {
   const [groupLoading, setGroupLoading] = useState(false)
   const [groupModal, setGroupModal] = useState(false)
   const [editGroup, setEditGroup] = useState<ExamGroup | null>(null)
-  const [groupForm, setGroupForm] = useState({ name: '', type: 'SCHOOL' as const, academic_session_id: '', description: '' })
+  const [groupForm, setGroupForm] = useState<{ name: string, type: 'SCHOOL' | 'BOARD', academic_session_id: string, description: string }>({ name: '', type: 'SCHOOL', academic_session_id: '', description: '' })
   const [groupSaving, setGroupSaving] = useState(false)
 
   // ── Detail Wizard (for a selected group) ─────────────────────────────────
@@ -123,7 +127,9 @@ const ExamsPage: FC = () => {
 
   // Schedule
   const [schedules, setSchedules] = useState<ExamSchedule[]>([])
-  const [scheduleRows, setScheduleRows] = useState<{ exam_id: string; section_id: string; date: string; start_time: string; end_time: string; room_no: string }[]>([{ exam_id: '', section_id: '', date: '', start_time: '09:00', end_time: '12:00', room_no: '' }])
+  const [schedClassId, setSchedClassId] = useState<string>('')
+  const [schedSectionId, setSchedSectionId] = useState<string>('')
+  const [scheduleGrid, setScheduleGrid] = useState<Record<number, { date: string; start_time: string; end_time: string; room_no: string; invigilator_id: string }>>({})
   const [scheduleSaving, setScheduleSaving] = useState(false)
 
   const loadGroups = useCallback(async () => {
@@ -170,7 +176,9 @@ const ExamsPage: FC = () => {
     setWizardTab('classes')
     setClassRows([{ class_id: '', section_id: '', sections: [] }])
     setSubjectRows([{ subject_id: '', max_marks: '100', min_marks: '33', credit_hours: '' }])
-    setScheduleRows([{ exam_id: '', section_id: '', date: '', start_time: '09:00', end_time: '12:00', room_no: '' }])
+    setSchedClassId('')
+    setSchedSectionId('')
+    setScheduleGrid({})
     setGroupExams([])
     setSchedules([])
     // Load group exams (subjects)
@@ -285,20 +293,23 @@ const ExamsPage: FC = () => {
   }
 
   const addSchedules = async () => {
-    const valid = scheduleRows.filter(r => r.exam_id && r.section_id && r.date)
-    if (!valid.length || !selectedGroup) return
+    const valid = Object.entries(scheduleGrid).filter(([_, row]) => row.date && row.start_time && row.end_time)
+    if (!valid.length || !selectedGroup || !schedSectionId) return
     setScheduleSaving(true)
     try {
-      await createSchedule(schoolId, selectedGroup.id, valid.map(r => ({
-        exam_id: Number(r.exam_id), section_id: Number(r.section_id),
-        date: r.date,
-        start_time: r.start_time.length === 5 ? `${r.start_time}:00` : r.start_time,
-        end_time: r.end_time.length === 5 ? `${r.end_time}:00` : r.end_time,
-        room_no: r.room_no || undefined,
+      await createSchedule(schoolId, selectedGroup.id, valid.map(([examIdStr, row]) => ({
+        exam_id: Number(examIdStr), section_id: Number(schedSectionId),
+        date: row.date,
+        start_time: row.start_time.length === 5 ? `${row.start_time}:00` : row.start_time,
+        end_time: row.end_time.length === 5 ? `${row.end_time}:00` : row.end_time,
+        room_no: row.room_no || undefined,
+        invigilator_id: row.invigilator_id ? Number(row.invigilator_id) : undefined
       })))
       const { data } = await getGroupSchedule(schoolId, selectedGroup.id)
-      if (data.success) setSchedules(data.data || [])
-      setScheduleRows([{ exam_id: '', section_id: '', date: '', start_time: '09:00', end_time: '12:00', room_no: '' }])
+      if (data.success) {
+        setSchedules(data.data || [])
+        alert('Schedule saved successfully!')
+      }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Failed to save schedules. Please check your data.')
     } finally { setScheduleSaving(false) }
@@ -600,115 +611,111 @@ const ExamsPage: FC = () => {
                             </div>
                           </div>
                         ) : (
-                          <div className="mb-8">
-                            {groupExams.map((exam, examIdx) => {
-                              return (
-                                <div key={exam.id} className={`${examIdx !== 0 ? 'mt-10' : ''}`}>
-                                  <div className="d-flex align-items-center mb-5 border-bottom pb-3">
-                                    <h4 className="fw-bold text-gray-800 m-0">
-                                      {exam.subject?.name} <span className="text-muted ms-2 fs-7 fw-medium">(Code: {exam.subject?.code || exam.subject_id})</span>
-                                    </h4>
-                                  </div>
-                                  <div className="">
-                                    {groupClassSections.length === 0 ? (
-                                      <span className="text-muted">No classes/sections mapped to this group.</span>
-                                    ) : (
-                                      <div className="table-responsive">
-                                        <table className="table table-row-dashed align-middle mb-0 gs-0 gy-3">
-                                          <thead>
-                                            <tr className="text-muted fw-bold fs-8 text-uppercase border-bottom-0">
-                                              <th className="w-200px ps-0">Section</th>
-                                              <th className="min-w-150px">Date</th>
-                                              <th className="min-w-200px">Time (Start - End)</th>
-                                              <th className="min-w-100px">Room No</th>
-                                              <th className="w-50px text-end pe-0">Action</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {groupClassSections.map(c => {
-                                              const existingDbItem = schedules.find(s => s.exam_id === exam.id && s.section_id === c.section_id);
-                                              const draftIdx = scheduleRows.findIndex(r => Number(r.exam_id) === exam.id && Number(r.section_id) === c.section_id);
-                                              const isDraft = draftIdx > -1;
-                                              const draftRow = isDraft ? scheduleRows[draftIdx] : null;
+                          <>
+                            {/* Top Bar Filters */}
+                            <div className="row g-3 mb-8 align-items-end bg-light p-5 rounded">
+                              <div className="col-md-4">
+                                <label className="form-label fw-bold">Select Class</label>
+                                <select className="form-select form-select-solid" value={schedClassId} onChange={e => { setSchedClassId(e.target.value); setSchedSectionId(''); setScheduleGrid({}); }}>
+                                  <option value="">-- Choose Class --</option>
+                                  {Array.from(new Set(groupClassSections.map(c => c.class_id))).map(cid => {
+                                    const cls = groupClassSections.find(c => c.class_id === cid)?.class
+                                    return cls ? <option key={cls.id} value={cls.id}>{cls.name}</option> : null
+                                  })}
+                                </select>
+                              </div>
+                              <div className="col-md-4">
+                                <label className="form-label fw-bold">Select Section</label>
+                                <select className="form-select form-select-solid" value={schedSectionId} disabled={!schedClassId} onChange={e => { setSchedSectionId(e.target.value); setScheduleGrid({}); }}>
+                                  <option value="">-- Choose Section --</option>
+                                  {groupClassSections.filter(c => String(c.class_id) === schedClassId).map(c => (
+                                    <option key={c.section_id} value={c.section_id}>{c.section?.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="col-md-4 text-end">
+                                <button className="btn btn-primary w-100" onClick={addSchedules} disabled={scheduleSaving || !schedSectionId}>
+                                  {scheduleSaving ? <span className='spinner-border spinner-border-sm me-2' /> : <i className='ki-duotone ki-check fs-2'><span className="path1" /><span className="path2" /></i>}
+                                  Save Exam Schedule
+                                </button>
+                              </div>
+                            </div>
 
-                                              if (existingDbItem) {
-                                                return (
-                                                  <tr key={c.id}>
-                                                    <td className="ps-0 py-4">
-                                                      <div className="d-flex align-items-center">
-                                                        <i className="ki-duotone ki-check-circle fs-2 text-primary me-2"><span className="path1" /><span className="path2" /></i>
-                                                        <span className="fw-bold text-gray-800">Section {c.section?.name || `#${c.section_id}`}</span>
-                                                      </div>
-                                                    </td>
-                                                    <td className="text-gray-800 fw-semibold">{new Date(existingDbItem.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                                                    <td><span className="text-gray-700 fw-bold">{existingDbItem.start_time} - {existingDbItem.end_time}</span></td>
-                                                    <td><span className="text-muted fw-semibold">{existingDbItem.room_no || '—'}</span></td>
-                                                    <td className="text-end pe-0">
-                                                      <button className="btn btn-icon btn-sm btn-light-danger" title="Delete Schedule"
-                                                        onClick={async () => { await deleteSchedule(schoolId, selectedGroup.id, existingDbItem.id); const { data } = await getGroupSchedule(schoolId, selectedGroup.id); if (data.success) setSchedules(data.data || []) }}
-                                                      >
-                                                        <i className="ki-duotone ki-trash fs-5"><span className="path1" /><span className="path2" /><span className="path3" /><span className="path4" /><span className="path5" /></i>
-                                                      </button>
-                                                    </td>
-                                                  </tr>
-                                                )
-                                              }
+                            {/* The Grid Layout */}
+                            {!schedSectionId ? (
+                              <div className="text-center py-10">
+                                <span className="text-muted fw-semibold">Please select a class and section to view the schedule template.</span>
+                              </div>
+                            ) : (
+                              <div className="table-responsive">
+                                <table className="table table-row-dashed border table-row-gray-300 align-middle gs-0 gy-4">
+                                  <thead>
+                                    <tr className="fw-bold text-muted bg-light text-uppercase">
+                                      <th className="ps-4 min-w-150px rounded-start">Subject</th>
+                                      <th className="min-w-150px">Date</th>
+                                      <th className="min-w-120px">Start Time</th>
+                                      <th className="min-w-120px">End Time</th>
+                                      <th className="min-w-100px">Room No</th>
+                                      <th className="min-w-150px rounded-end">Invigilator</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {groupExams.map(exam => {
+                                      const existing = schedules.find(s => s.exam_id === exam.id && String(s.section_id) === schedSectionId)
+                                      
+                                      // Only hydrate initial state from existing if not already modified in scheduleGrid
+                                      const rowData = scheduleGrid[exam.id] || {
+                                        date: existing?.date ? new Date(existing.date).toISOString().split('T')[0] : '',
+                                        start_time: existing?.start_time || '',
+                                        end_time: existing?.end_time || '',
+                                        room_no: existing?.room_no || '',
+                                        invigilator_id: String(existing?.invigilator_id || '')
+                                      }
 
-                                              return (
-                                                <tr key={c.id} className="border-bottom border-gray-200 border-bottom-dashed bg-hover-light">
-                                                  <td className="py-3">
-                                                    <div className="form-check form-check-custom form-check-sm">
-                                                      <input className="form-check-input border-gray-400" type="checkbox" checked={isDraft}
-                                                        onChange={(e) => {
-                                                          if (e.target.checked) setScheduleRows([...scheduleRows, { exam_id: String(exam.id), section_id: String(c.section_id), date: '', start_time: '09:00', end_time: '12:00', room_no: '' }]);
-                                                          else setScheduleRows(scheduleRows.filter(r => !(Number(r.exam_id) === exam.id && Number(r.section_id) === c.section_id)));
-                                                        }}
-                                                      />
-                                                      <label className="form-check-label fw-bold text-gray-700 cursor-pointer">Section {c.section?.name || `#${c.section_id}`}</label>
-                                                    </div>
-                                                  </td>
-                                                  <td>
-                                                    <input type="date" className="form-control form-control-sm form-control-solid" value={draftRow?.date || ''} disabled={!isDraft}
-                                                      onChange={(e) => { const r = [...scheduleRows]; r[draftIdx].date = e.target.value; setScheduleRows(r); }}
-                                                    />
-                                                  </td>
-                                                  <td>
-                                                    <div className="d-flex align-items-center gap-2">
-                                                      <input type="time" className="form-control form-control-sm form-control-solid w-120px" value={draftRow?.start_time || ''} disabled={!isDraft}
-                                                        onChange={(e) => { const r = [...scheduleRows]; r[draftIdx].start_time = e.target.value; setScheduleRows(r); }}
-                                                      />
-                                                      <span className="text-muted fw-bold">-</span>
-                                                      <input type="time" className="form-control form-control-sm form-control-solid w-120px" value={draftRow?.end_time || ''} disabled={!isDraft}
-                                                        onChange={(e) => { const r = [...scheduleRows]; r[draftIdx].end_time = e.target.value; setScheduleRows(r); }}
-                                                      />
-                                                    </div>
-                                                  </td>
-                                                  <td>
-                                                    <input type="text" placeholder="e.g. 101" className="form-control form-control-sm form-control-solid" value={draftRow?.room_no || ''} disabled={!isDraft}
-                                                      onChange={(e) => { const r = [...scheduleRows]; r[draftIdx].room_no = e.target.value; setScheduleRows(r); }}
-                                                    />
-                                                  </td>
-                                                  <td></td>
-                                                </tr>
-                                              );
-                                            })}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                                      const updateGrid = (field: keyof typeof rowData, val: string) => {
+                                        setScheduleGrid(prev => ({ ...prev, [exam.id]: { ...rowData, [field]: val } }))
+                                      }
+
+                                      return (
+                                        <tr key={exam.id}>
+                                          <td className="ps-4">
+                                            <div className="d-flex align-items-center">
+                                              <div className="d-flex flex-column">
+                                                <span className="text-gray-800 fw-bold">{exam.subject?.name}</span>
+                                                <span className="text-muted fw-semibold fs-7 text-uppercase">{(exam.subject as any)?.code || 'SUB'}</span>
+                                              </div>
+                                              {existing && <i className="ki-duotone ki-check-circle fs-2 text-success ms-2" title="Saved"><span className="path1" /><span className="path2" /></i>}
+                                            </div>
+                                          </td>
+                                          <td>
+                                            <input type="date" className="form-control form-control-sm form-control-solid" value={rowData.date} onChange={e => updateGrid('date', e.target.value)} />
+                                          </td>
+                                          <td>
+                                            <input type="time" className="form-control form-control-sm form-control-solid" value={rowData.start_time} onChange={e => updateGrid('start_time', e.target.value)} />
+                                          </td>
+                                          <td>
+                                            <input type="time" className="form-control form-control-sm form-control-solid" value={rowData.end_time} onChange={e => updateGrid('end_time', e.target.value)} />
+                                          </td>
+                                          <td>
+                                            <input type="text" className="form-control form-control-sm form-control-solid" placeholder="e.g. 101" value={rowData.room_no} onChange={e => updateGrid('room_no', e.target.value)} />
+                                          </td>
+                                          <td>
+                                            <select className="form-select form-select-sm form-select-solid" value={rowData.invigilator_id} onChange={e => updateGrid('invigilator_id', e.target.value)}>
+                                              <option value="">Unassigned</option>
+                                              {teachers.map(t => (
+                                                <option key={t.id} value={t.id}>{t.name || `${t.first_name || ''} ${t.last_name || ''}`.trim()}</option>
+                                              ))}
+                                            </select>
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </>
                         )}
-                        <div className='d-flex justify-content-between mt-6'>
-                          <button className='btn btn-light' onClick={() => setWizardTab('subjects')}>← Back to Subjects</button>
-                          <button className='btn btn-primary' onClick={addSchedules} disabled={scheduleSaving || scheduleRows.filter(r => r.exam_id && r.section_id && r.date).length === 0}>
-                            {scheduleSaving ? <span className='spinner-border spinner-border-sm me-2' /> : <i className='ki-duotone ki-check fs-2'><span className="path1" /><span className="path2" /></i>}
-                            Save Checked Schedules
-                          </button>
-                        </div>
                       </div>
                     )}
 

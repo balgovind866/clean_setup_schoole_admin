@@ -99,6 +99,7 @@ export interface ExamSchedulePayload {
   start_time: string
   end_time: string
   room_no?: string
+  invigilator_id?: number
 }
 
 // ─── Exam Result ──────────────────────────────────────────────────────────────
