@@ -206,6 +206,14 @@ const SubjectsPage: FC = () => {
       await assignClassTeacher(schoolId, ctClassId, { section_id: ctSectionId, teacher_id: ctTeacherId })
       setCtSuccess('Class teacher assigned successfully!')
       setTimeout(() => setCtSuccess(null), 3000)
+      // ── Re-fetch sections so table reflects updated class_teacher_id immediately ──
+      setCtSectionId(null); setCtTeacherId(null)
+      getClassSections(schoolId, ctClassId)
+        .then(r => {
+          const list = (r.data.data as any)?.sections || (r.data.data as any)?.mappings || []
+          setCtSections(list)
+        })
+        .catch(() => {})
     } catch (e: any) { setCtError(e.response?.data?.message || 'Failed to assign') }
     finally { setAssigningCT(false) }
   }

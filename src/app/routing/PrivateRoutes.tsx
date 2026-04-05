@@ -100,6 +100,7 @@ const PrivateRoutes = () => {
         <Route path='fees/reports' element={<SuspensedView><RouteConfig.feeRoutes.reports /></SuspensedView>} />
 
         {/* Timetable */}
+        <Route path='timetable/grid' element={<SuspensedView><RouteConfig.timetableAdditionalRoutes.grid /></SuspensedView>} />
         <Route path='timetable/classes' element={<SuspensedView><RouteConfig.timetableAdditionalRoutes.classes /></SuspensedView>} />
         <Route path='timetable/teachers' element={<SuspensedView><RouteConfig.timetableAdditionalRoutes.teachers /></SuspensedView>} />
         <Route path='timetable/resources' element={<SuspensedView><RouteConfig.timetableAdditionalRoutes.resources /></SuspensedView>} />

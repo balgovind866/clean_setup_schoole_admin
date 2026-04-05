@@ -102,11 +102,12 @@ const SidebarMenuMain = () => {
 
           {hasPermission('timetable') && (
             <SidebarMenuItemWithSub to='/timetable' title='Timetable' icon='calendar' fontIcon='bi-calendar3'>
+              <SidebarMenuItem to='/timetable/grid' title='🗓️ Timetable Grid' hasBullet={true} />
+              <SidebarMenuItem to='/timetable/periods' title='⏱️ Period Slots' hasBullet={true} />
               <SidebarMenuItem to='/timetable/classes' title='Class Timetable' hasBullet={true} />
               <SidebarMenuItem to='/timetable/teachers' title='Teacher Schedule' hasBullet={true} />
               <SidebarMenuItem to='/timetable/resources' title='Resources' hasBullet={true} />
               <SidebarMenuItem to='/timetable/substitution' title='Substitution' hasBullet={true} />
-              <SidebarMenuItem to='/timetable/periods' title='Periods' hasBullet={true} />
             </SidebarMenuItemWithSub>
           )}
 

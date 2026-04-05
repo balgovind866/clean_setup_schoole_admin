@@ -122,6 +122,7 @@ export const staffAdditionalRoutes = {
 
 // Timetable Module Additional Routes
 export const timetableAdditionalRoutes = {
+    grid: lazyLoad(() => import('../modules/timetable/TimetablePage'), 'TimetableWrapper'),
     classes: lazyLoad(() => import('../modules/timetable/ClassesPage'), 'ClassTimetableWrapper'),
     teachers: lazyLoad(() => import('../modules/timetable/TeachersPage'), 'TeacherScheduleWrapper'),
     resources: lazyLoad(() => import('../modules/timetable/ResourcesPage'), 'ResourcesWrapper'),
