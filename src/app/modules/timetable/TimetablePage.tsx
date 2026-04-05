@@ -10,6 +10,7 @@ import {
   getTimetableVersions,
   publishTimetableVersion,
   unpublishTimetableVersion,
+  getTeacherBySubject,
 } from './core/_requests'
 import {
   PeriodSlot,
@@ -18,9 +19,9 @@ import {
   BulkSaveEntry,
   DayOfWeek,
 } from './core/_models'
-import { getAcademicSessions, getClasses, getClassSections, getSubjects } from '../academic/core/_requests'
+import { getAcademicSessions, getClasses, getClassSections, getSubjects, getTeacherAllocations, getClassSubjects } from '../academic/core/_requests'
 import { getTeachers } from '../teachers/core/_requests'
-import { SessionModel, ClassModel, ClassSectionMappingModel, SubjectModel } from '../academic/core/_models'
+import { SessionModel, ClassModel, ClassSectionMappingModel, SubjectModel, TeacherAllocationModel, ClassSubjectMappingModel } from '../academic/core/_models'
 import { toast } from 'react-toastify'
 
 const ALL_DAYS: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
@@ -77,6 +78,10 @@ const TimetablePage: FC = () => {
   const [subjects, setSubjects] = useState<SubjectModel[]>([])
   const [teachers, setTeachers] = useState<any[]>([])
   const [slots, setSlots] = useState<PeriodSlot[]>([])
+  // Subjects mapped to this class (filtered for cell popup)
+  const [classSubjects, setClassSubjects] = useState<ClassSubjectMappingModel[]>([])
+  // subject_id → teacher_id mapping for this class section
+  const [allocations, setAllocations] = useState<TeacherAllocationModel[]>([])
 
   // ── Filter state ─────────────────────────────────────────────────────────────
   const [sessionId, setSessionId] = useState<number>(0)
@@ -118,14 +123,19 @@ const TimetablePage: FC = () => {
     }).catch(() => {})
   }, [schoolId])
 
-  /* ---------- Load sections when class changes ---------- */
+  /* ---------- Load sections + class subjects when class changes ---------- */
   useEffect(() => {
     setSectionId(0)
     setSections([])
+    setClassSubjects([])
     if (!schoolId || !classId) return
-    getClassSections(schoolId, classId)
-      .then(res => { if (res.data.success) setSections(res.data.data.sections || []) })
-      .catch(() => {})
+    Promise.all([
+      getClassSections(schoolId, classId),
+      getClassSubjects(schoolId, classId),
+    ]).then(([secRes, subRes]) => {
+      if (secRes.data.success) setSections(secRes.data.data.sections || [])
+      if (subRes.data.success) setClassSubjects(subRes.data.data.subjects || [])
+    }).catch(() => {})
   }, [schoolId, classId])
 
   /* ---------- Load period slots when session changes ---------- */
@@ -175,6 +185,14 @@ const TimetablePage: FC = () => {
     } catch {}
   }, [schoolId, sectionId, sessionId])
 
+  /* ---------- Load teacher allocations when section/session changes ---------- */
+  useEffect(() => {
+    if (!schoolId || !sectionId || !sessionId) { setAllocations([]); return }
+    getTeacherAllocations(schoolId, { class_section_id: sectionId, academic_session_id: sessionId })
+      .then(res => { if (res.data.success) setAllocations(res.data.data || []) })
+      .catch(() => {})
+  }, [schoolId, sectionId, sessionId])
+
   /* ---------- Auto-load when filters are complete ---------- */
   useEffect(() => {
     if (sectionId && sessionId) {
@@ -194,13 +212,17 @@ const TimetablePage: FC = () => {
       slots.forEach(slot => {
         const cell = edits[day]?.[slot.id]
         if (cell) {
-          entries.push({
-            day_of_week: day,
-            period_slot_id: slot.id,
-            subject_id: slot.is_break ? null : (cell.subject_id || null),
-            teacher_id: slot.is_break ? null : (cell.teacher_id || null),
-            room_no: cell.room_no || null,
-          })
+          // ONLY include if at least one field is filled
+          const isFilled = cell.subject_id || cell.teacher_id || (cell.room_no && cell.room_no.trim() !== '')
+          if (isFilled) {
+            entries.push({
+              day_of_week: day,
+              period_slot_id: slot.id,
+              subject_id: slot.is_break ? null : (cell.subject_id || null),
+              teacher_id: slot.is_break ? null : (cell.teacher_id || null),
+              room_no: cell.room_no && cell.room_no.trim() !== '' ? cell.room_no : null,
+            })
+          }
         }
       })
     })
@@ -214,12 +236,13 @@ const TimetablePage: FC = () => {
         entries,
       })
       if (res.data.success) {
-        toast.success(`Timetable draft saved! (Version #${res.data.data.version_id})`)
+        toast.success(`✅ Timetable draft saved! (Version #${res.data.data.version_id}) — Go to Versions tab to publish.`)
         fetchVersions()
-        setActiveTab('versions')
+        // Stay on grid tab — user can switch manually
       }
     } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Save failed')
+      toast.error(e?.response?.data?.message || 'Save failed — check console for details')
+      console.error('Bulk save error:', e)
     } finally {
       setSaving(false)
     }
@@ -245,11 +268,56 @@ const TimetablePage: FC = () => {
   }
 
   /* ---------- Cell edit helpers ---------- */
-  const setCell = (day: DayOfWeek, slotId: number, patch: Partial<CellData>) => {
-    setEdits(prev => ({
-      ...prev,
-      [day]: { ...prev[day], [slotId]: { ...prev[day]?.[slotId], ...patch } },
-    }))
+  const setCell = async (day: DayOfWeek, slotId: number, patch: Partial<CellData>) => {
+    // If subject changed → auto-fetch teacher via by-subject API
+    if ('subject_id' in patch && patch.subject_id) {
+      // Optimistic update first
+      setEdits(prev => {
+        const current = prev[day]?.[slotId] || { subject_id: null, teacher_id: null, room_no: '' }
+        return {
+          ...prev,
+          [day]: { ...prev[day], [slotId]: { ...current, ...patch } },
+        }
+      })
+
+      // Then fetch the mapped teacher for this subject + session
+      try {
+        const res = await getTeacherBySubject(schoolId, patch.subject_id, sessionId)
+        if (res.data.success && res.data.data.length > 0) {
+          // Find the teacher whose allocation includes current class_section_id
+          const matched = res.data.data.find(t =>
+            t.classes.some(c => c.class_section_id === sectionId)
+          )
+          const teacherId = matched?.teacher_id || res.data.data[0]?.teacher_id || null
+
+          if (teacherId) {
+            setEdits(prev => {
+              const current = prev[day]?.[slotId] || { subject_id: null, teacher_id: null, room_no: '' }
+              return {
+                ...prev,
+                [day]: { ...prev[day], [slotId]: { ...current, teacher_id: teacherId } },
+              }
+            })
+          }
+        }
+      } catch {
+        // silently ignore — teacher dropdown still manually editable
+      }
+    } else {
+      // For non-subject patches (teacher, room_no) or subject clear
+      setEdits(prev => {
+        const current = prev[day]?.[slotId] || { subject_id: null, teacher_id: null, room_no: '' }
+        const updated = { ...current, ...patch }
+        // Clear teacher if subject is explicitly cleared
+        if ('subject_id' in patch && !patch.subject_id) {
+          updated.teacher_id = null
+        }
+        return {
+          ...prev,
+          [day]: { ...prev[day], [slotId]: updated },
+        }
+      })
+    }
   }
 
   const getCell = (day: DayOfWeek, slotId: number): CellData =>
@@ -537,18 +605,40 @@ const TimetablePage: FC = () => {
                                     style={{ minWidth: '260px', zIndex: 999, border: '1px solid #ddd' }}
                                   >
                                     <div className='mb-3'>
-                                      <label className='form-label fw-semibold fs-7 mb-1'>Subject</label>
+                                      <div className='d-flex align-items-center justify-content-between mb-1'>
+                                        <label className='form-label fw-semibold fs-7 mb-0'>Subject</label>
+                                        {classSubjects.length > 0 && (
+                                          <span className='badge badge-light-primary fs-9 py-1 px-2'>
+                                            {classSubjects.length} mapped
+                                          </span>
+                                        )}
+                                      </div>
                                       <select
                                         className='form-select form-select-sm form-select-solid'
                                         value={cell.subject_id || ''}
                                         onChange={e => setCell(day, slot.id, { subject_id: e.target.value ? Number(e.target.value) : null })}
                                       >
-                                        <option value=''>No Subject</option>
-                                        {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                        <option value=''>— Select Subject —</option>
+                                        {(classSubjects.length > 0
+                                          ? classSubjects.map(cs => cs.subject).filter(Boolean)
+                                          : subjects
+                                        ).map(s => s && (
+                                          <option key={s.id} value={s.id}>
+                                            {s.name} {s.code ? `(${s.code})` : ''}
+                                          </option>
+                                        ))}
                                       </select>
                                     </div>
                                     <div className='mb-3'>
-                                      <label className='form-label fw-semibold fs-7 mb-1'>Teacher</label>
+                                      <div className='d-flex align-items-center justify-content-between mb-1'>
+                                        <label className='form-label fw-semibold fs-7 mb-0'>Teacher</label>
+                                        {cell.teacher_id && cell.subject_id && (
+                                          <span className='badge badge-light-success fs-9 py-1 px-2'>
+                                            <i className='ki-duotone ki-check fs-9 me-1'><span className='path1'></span><span className='path2'></span></i>
+                                            Auto-filled
+                                          </span>
+                                        )}
+                                      </div>
                                       <select
                                         className='form-select form-select-sm form-select-solid'
                                         value={cell.teacher_id || ''}
