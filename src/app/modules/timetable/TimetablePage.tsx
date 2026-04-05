@@ -23,6 +23,9 @@ import { getAcademicSessions, getClasses, getClassSections, getSubjects, getTeac
 import { getTeachers } from '../teachers/core/_requests'
 import { SessionModel, ClassModel, ClassSectionMappingModel, SubjectModel, TeacherAllocationModel, ClassSubjectMappingModel } from '../academic/core/_models'
 import { toast } from 'react-toastify'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import * as XLSX from 'xlsx'
 
 const ALL_DAYS: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
 const DAY_SHORT: Record<DayOfWeek, string> = {
@@ -411,6 +414,121 @@ const TimetablePage: FC = () => {
   const nonBreakSlots = slots.filter(s => !s.is_break)
 
   /* =========================================================================
+     EXPORTS
+  ========================================================================= */
+  const exportToPDF = () => {
+    if (slots.length === 0) {
+      toast.warning('No schedule data to export. Please select Class & Section with valid empty/filled slots.')
+      return
+    }
+
+    const doc = new jsPDF('landscape')
+    const lbl = activeSectionLabel()
+    const fileName = lbl ? `Timetable_${lbl.replace(/ /g, '_')}.pdf` : 'Timetable.pdf'
+
+    doc.setFontSize(18)
+    doc.text(`Timetable - ${lbl || 'Draft'}`, 14, 20)
+
+    const tableCols = ['Day', ...slots.map(s => s.is_break ? 'BREAK' : `${s.name}\n${fmtTime(s.start_time)} - ${fmtTime(s.end_time)}`)]
+
+    const tableData = ALL_DAYS.map((day) => {
+      const row = [day.substring(0, 3)]
+      slots.forEach((s) => {
+        if (s.is_break) {
+          row.push('') // placeholder for spanned break
+        } else {
+          const cell = getCell(day, s.id)
+          const sub = subjectName(cell.subject_id) || ''
+          const tchr = teacherName(cell.teacher_id) || ''
+          const rm = cell.room_no ? `(${cell.room_no})` : ''
+          const parts = [sub, tchr, rm].filter(Boolean)
+          row.push(parts.join('\n') || '-')
+        }
+      })
+      return row
+    })
+
+    autoTable(doc, {
+      startY: 25,
+      head: [tableCols],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [54, 153, 255], textColor: 255, halign: 'center', valign: 'middle' },
+      styles: { halign: 'center', valign: 'middle', fontSize: 10, cellPadding: 3, textColor: [50, 50, 50] },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index > 0) {
+          const slot = slots[data.column.index - 1]
+          if (slot && slot.is_break) {
+            if (data.row.index === 0) {
+              data.cell.rowSpan = ALL_DAYS.length
+              data.cell.text = ['B', 'R', 'E', 'A', 'K']
+              data.cell.styles.fillColor = [255, 248, 221] // Light warning
+              data.cell.styles.textColor = [255, 150, 0] // Warning text
+              data.cell.styles.fontStyle = 'bold'
+            }
+          }
+        }
+      }
+    })
+
+    doc.save(fileName)
+    toast.success('PDF Export downloaded!')
+  }
+
+  const exportToExcel = () => {
+    if (slots.length === 0) {
+      toast.warning('No schedule data to export.')
+      return
+    }
+
+    const worksheetData: any[][] = []
+
+    // Headers
+    const headers = ['Day', ...slots.map(s => s.name)]
+    const timeRow = ['Time', ...slots.map(s => `${fmtTime(s.start_time)} - ${fmtTime(s.end_time)}`)]
+
+    worksheetData.push(headers)
+    worksheetData.push(timeRow)
+
+    const merges: any[] = []
+
+    ALL_DAYS.forEach((day, rIndex) => {
+      const row = [day]
+      slots.forEach((s, cIndex) => {
+        if (s.is_break) {
+          if (rIndex === 0) {
+            // merge down for break: starting row is index 2
+            merges.push({ s: { r: 2, c: cIndex + 1 }, e: { r: 2 + ALL_DAYS.length - 1, c: cIndex + 1 } })
+            row.push('BREAK')
+          } else {
+            row.push('')
+          }
+        } else {
+          const cell = getCell(day, s.id)
+          const sub = subjectName(cell.subject_id) || ''
+          const tchr = teacherName(cell.teacher_id) || ''
+          const rm = cell.room_no ? `(${cell.room_no})` : ''
+          const parts = [sub, tchr, rm].filter(Boolean)
+          row.push(parts.join('\n') || '-')
+        }
+      })
+      worksheetData.push(row)
+    })
+
+    const ws = XLSX.utils.aoa_to_sheet(worksheetData)
+    if (merges.length > 0) ws['!merges'] = merges
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Timetable')
+
+    const lbl = activeSectionLabel()
+    const fileName = lbl ? `Timetable_${lbl.replace(/ /g, '_')}.xlsx` : 'Timetable.xlsx'
+    XLSX.writeFile(wb, fileName)
+    toast.success('Excel Export downloaded!')
+  }
+
+  /* =========================================================================
      RENDER
   ========================================================================= */
   return (
@@ -547,10 +665,9 @@ const TimetablePage: FC = () => {
                 </li>
               </ul>
 
-              {/* Grid / List toggle — only show on grid tab when data is loaded */}
+              {/* Grid / List toggle / Exports */}
               {activeTab === 'grid' && sectionId && slots.length > 0 && (
-                <div className='d-flex align-items-center border-start ps-4'>
-                  <span className='text-muted fs-8 me-2 fw-semibold'>View:</span>
+                <div className='d-flex align-items-center border-start ps-4 gap-4'>
                   <div className='btn-group btn-group-sm'>
                     <button
                       className={`btn btn-icon btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-light'}`}
@@ -572,6 +689,18 @@ const TimetablePage: FC = () => {
                       </i>
                     </button>
                   </div>
+
+                  {/* <div className='d-flex align-items-center gap-2 border-start ps-4'>
+                    <span className='text-muted fs-8 fw-semibold'>Export:</span>
+                    <button className='btn btn-sm btn-light-danger fw-bold' onClick={exportToPDF}>
+                      <i className='ki-duotone ki-file-down fs-5 me-1'><span className='path1'></span><span className='path2'></span></i>
+                      PDF
+                    </button>
+                    <button className='btn btn-sm btn-light-success fw-bold' onClick={exportToExcel}>
+                      <i className='ki-duotone ki-document fs-5 me-1'><span className='path1'></span><span className='path2'></span></i>
+                      Excel
+                    </button>
+                  </div> */}
                 </div>
               )}
             </div>
@@ -829,7 +958,7 @@ const TimetablePage: FC = () => {
                                         <div className='fw-bolder text-primary fs-5 mb-1'>{sub}</div>
                                         {tchr && <div className='text-gray-700 fs-7 fw-semibold'>{tchr}</div>}
                                         {cell.room_no && <div className='text-muted fs-8 mt-1'>Room: {cell.room_no}</div>}
-                                        
+
                                         {/* Clear button */}
                                         <button
                                           className='btn btn-icon btn-sm btn-color-gray-400 btn-active-color-danger position-absolute top-0 end-0 ms-auto'
@@ -886,6 +1015,17 @@ const TimetablePage: FC = () => {
                     Click any cell to assign Subject / Teacher. Save as Draft, then Publish from the <strong>Versions</strong> tab.
                   </span>
                   <div className='d-flex gap-3'>
+                    <div className='d-flex align-items-center gap-2 border-start ps-4'>
+                      <span className='text-muted fs-8 fw-semibold'>Export:</span>
+                      <button className='btn btn-sm btn-light-danger fw-bold' onClick={exportToPDF}>
+                        <i className='ki-duotone ki-file-down fs-5 me-1'><span className='path1'></span><span className='path2'></span></i>
+                        PDF
+                      </button>
+                      <button className='btn btn-sm btn-light-success fw-bold' onClick={exportToExcel}>
+                        <i className='ki-duotone ki-document fs-5 me-1'><span className='path1'></span><span className='path2'></span></i>
+                        Excel
+                      </button>
+                    </div>
                     <button className='btn btn-light btn-sm' onClick={fetchGrid} disabled={loadingGrid}>
                       Reset
                     </button>
@@ -894,6 +1034,7 @@ const TimetablePage: FC = () => {
                         ? <><span className='spinner-border spinner-border-sm me-2'></span>Saving...</>
                         : 'Save Draft'}
                     </button>
+
                   </div>
                 </div>
               )}
