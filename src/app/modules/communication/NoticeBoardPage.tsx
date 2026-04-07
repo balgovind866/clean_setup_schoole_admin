@@ -62,6 +62,7 @@ const NoticeBoardPage: FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterCategory, setFilterCategory] = useState<string>('')
   const [search, setSearch] = useState('')
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
 
   // Modal state
   const [showModal, setShowModal] = useState(false)
@@ -260,6 +261,7 @@ const NoticeBoardPage: FC = () => {
               <h3 className='fw-bold mb-0'>Notice Board</h3>
               <span className='text-muted fs-7'>{filtered.length} notices</span>
             </div>
+            
             <div className='card-toolbar'>
               <div className='d-flex align-items-center gap-2 gap-lg-3 flex-wrap'>
                 {/* Search */}
@@ -272,17 +274,6 @@ const NoticeBoardPage: FC = () => {
                     onChange={e => setSearch(e.target.value)}
                   />
                 </div>
-                {/* Status filter */}
-                <select
-                  className='form-select form-select-sm form-select-solid w-125px my-1'
-                  value={filterStatus}
-                  onChange={e => setFilterStatus(e.target.value)}
-                >
-                  <option value=''>All Status</option>
-                  <option value='DRAFT'>Draft</option>
-                  <option value='PUBLISHED'>Published</option>
-                  <option value='ARCHIVED'>Archived</option>
-                </select>
                 {/* Category filter */}
                 <select
                   className='form-select form-select-sm form-select-solid w-150px my-1'
@@ -294,6 +285,25 @@ const NoticeBoardPage: FC = () => {
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
+
+                {/* View Toggle */}
+                <div className='d-flex align-items-center bg-light rounded p-1 mx-2'>
+                  <button
+                    className={`btn btn-sm btn-icon ${viewMode === 'grid' ? 'btn-white shadow-sm' : 'btn-color-gray-600'}`}
+                    onClick={() => setViewMode('grid')}
+                    title='Grid View'
+                  >
+                    <i className='bi bi-grid-fill'></i>
+                  </button>
+                  <button
+                    className={`btn btn-sm btn-icon ${viewMode === 'list' ? 'btn-white shadow-sm' : 'btn-color-gray-600'}`}
+                    onClick={() => setViewMode('list')}
+                    title='List View'
+                  >
+                    <i className='bi bi-list-task'></i>
+                  </button>
+                </div>
+
                 {/* New Notice */}
                 <button className='btn btn-sm btn-primary my-1' onClick={openCreate}>
                   <i className='bi bi-plus-lg'></i> New Notice
@@ -302,8 +312,31 @@ const NoticeBoardPage: FC = () => {
             </div>
           </div>
 
-          {/* Table */}
           <div className='card-body pt-0'>
+            {/* Status Tabs */}
+            <ul className='nav nav-stretch nav-line-tabs nav-line-tabs-2x border-transparent fs-6 fw-bold mb-8'>
+              <li className='nav-item'>
+                <a className={`nav-link text-active-primary cursor-pointer ${filterStatus === '' ? 'active' : ''}`} onClick={() => setFilterStatus('')}>
+                  All
+                </a>
+              </li>
+              <li className='nav-item'>
+                <a className={`nav-link text-active-primary cursor-pointer ${filterStatus === 'PUBLISHED' ? 'active' : ''}`} onClick={() => setFilterStatus('PUBLISHED')}>
+                  Published
+                </a>
+              </li>
+              <li className='nav-item'>
+                <a className={`nav-link text-active-primary cursor-pointer ${filterStatus === 'DRAFT' ? 'active' : ''}`} onClick={() => setFilterStatus('DRAFT')}>
+                  Drafts
+                </a>
+              </li>
+              <li className='nav-item'>
+                <a className={`nav-link text-active-primary cursor-pointer ${filterStatus === 'ARCHIVED' ? 'active' : ''}`} onClick={() => setFilterStatus('ARCHIVED')}>
+                  Archived
+                </a>
+              </li>
+            </ul>
+
             {loading ? (
               <div className='text-center py-14'>
                 <div className='spinner-border text-primary mb-3'></div>
@@ -317,7 +350,8 @@ const NoticeBoardPage: FC = () => {
                   Create First Notice
                 </button>
               </div>
-            ) : (
+            ) : viewMode === 'list' ? (
+              /* ── LIST VIEW ── */
               <div className='table-responsive'>
                 <table className='table table-row-dashed table-row-gray-200 align-middle gs-0 gy-4'>
                   <thead>
@@ -440,6 +474,68 @@ const NoticeBoardPage: FC = () => {
                   </tbody>
                 </table>
               </div>
+            ) : (
+              /* ── GRID VIEW ── */
+              <div className='row g-6'>
+                {sortedNotices.map(n => (
+                  <div key={n.id} className='col-md-6 col-lg-4'>
+                    <div className='card card-flush h-100 border border-gray-300 hover-elevate-up'>
+                      <div className='card-header pt-4 pb-2 px-5 min-h-0'>
+                        <div className='d-flex align-items-center'>
+                          {n.is_pinned && <i className='bi bi-pin-fill text-primary fs-5 me-2'></i>}
+                          <StatusBadge status={n.status} />
+                        </div>
+                        <div className='card-toolbar'>
+                          <span className='badge badge-light-primary fw-bold text-uppercase fs-9'>{n.category}</span>
+                        </div>
+                      </div>
+                      <div className='card-body px-5 py-3 cursor-pointer' onClick={() => openDetail(n)}>
+                        <h4 className='fw-bold text-gray-800 text-hover-primary mb-3'>{n.title}</h4>
+                        <div className='text-gray-600 fs-7 mb-4 text-truncate' style={{ maxHeight: '42px', whiteSpace: 'normal', overflow: 'hidden' }}>
+                          {n.content}
+                        </div>
+                        <div className='d-flex align-items-center justify-content-between mb-2'>
+                          <span className='text-muted fs-8'>
+                            <i className='bi bi-people me-1'></i> {n.target_type}
+                          </span>
+                          <PriorityDot priority={n.priority} />
+                        </div>
+                        <div className='text-muted fs-8'>
+                          <i className='bi bi-calendar-event me-1'></i>
+                          {n.publish_at ? new Date(n.publish_at).toLocaleDateString() : 'Unpublished'}
+                        </div>
+                      </div>
+                      <div className='card-footer px-5 py-3 border-top d-flex justify-content-end gap-2'>
+                        {actionLoading === n.id ? (
+                          <span className='spinner-border spinner-border-sm text-primary mx-4'></span>
+                        ) : (
+                          <>
+                            {n.status === 'DRAFT' && (
+                              <button className='btn btn-icon btn-sm btn-light-primary' title='Publish' onClick={() => handlePublish(n.id)}>
+                                <i className='bi bi-broadcast'></i>
+                              </button>
+                            )}
+                            <button className={`btn btn-icon btn-sm ${n.is_pinned ? 'btn-primary' : 'btn-light'}`} title={n.is_pinned ? 'Unpin' : 'Pin'} onClick={() => handlePin(n.id)}>
+                              <i className='bi bi-pin'></i>
+                            </button>
+                            <button className='btn btn-icon btn-sm btn-light-primary' title='Edit' onClick={() => openEdit(n)}>
+                              <i className='bi bi-pencil'></i>
+                            </button>
+                            {n.status === 'PUBLISHED' && (
+                              <button className='btn btn-icon btn-sm btn-light' title='Archive' onClick={() => handleArchive(n.id)}>
+                                <i className='bi bi-archive'></i>
+                              </button>
+                            )}
+                            <button className='btn btn-icon btn-sm btn-light-danger' title='Delete' onClick={() => handleDelete(n.id)}>
+                              <i className='bi bi-trash'></i>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -472,7 +568,7 @@ const NoticeBoardPage: FC = () => {
                 <label className='form-label fw-semibold required'>Content</label>
                 <textarea
                   className='form-control form-control-solid'
-                  rows={5}
+                  rows={8}
                   placeholder='Write notice content here...'
                   value={form.content}
                   onChange={e => setForm(p => ({ ...p, content: e.target.value }))}

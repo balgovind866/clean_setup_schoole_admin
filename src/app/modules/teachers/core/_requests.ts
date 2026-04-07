@@ -5,10 +5,12 @@ import {
   UpdateTeacherBankPayload,
   AddTeacherExperiencePayload,
   AddTeacherDocumentPayload,
+  UpdateTeacherPermissionsPayload,
   TeacherResponse,
   TeachersListResponse,
   TeacherExperienceResponse,
   TeacherDocumentResponse,
+  TeacherPermissionsResponse,
 } from './_models'
 
 const API_URL = import.meta.env.VITE_APP_API_URL
@@ -82,6 +84,19 @@ export function addTeacherDocument(
 ) {
   return axios.post<TeacherDocumentResponse>(
     `${TEACHER_URL(schoolId, teacherId)}/documents`,
+    payload
+  )
+}
+
+// ─── Permissions ──────────────────────────────────────────────────────────────
+
+export function updateTeacherPermissions(
+  schoolId: string | number,
+  teacherId: string | number,
+  payload: UpdateTeacherPermissionsPayload
+) {
+  return axios.patch<TeacherPermissionsResponse>(
+    `${TEACHER_URL(schoolId, teacherId)}/permissions`,
     payload
   )
 }

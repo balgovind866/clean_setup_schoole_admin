@@ -75,6 +75,7 @@ export interface TeacherModel {
   employment_type?: string
   is_active: boolean
   role?: string
+  permissions?: string[]
   createdAt?: string
   updatedAt?: string
   profession?: TeacherProfession
@@ -137,6 +138,10 @@ export interface AddTeacherDocumentPayload {
   file_path: string
 }
 
+export interface UpdateTeacherPermissionsPayload {
+  permissions: string[]
+}
+
 // ─── Responses ────────────────────────────────────────────────────────────────
 
 export interface TeacherResponse {
@@ -169,4 +174,10 @@ export interface TeacherDocumentResponse {
   success: boolean
   message: string
   data: { document: TeacherDocument }
+}
+
+export interface TeacherPermissionsResponse {
+  success: boolean
+  message: string
+  data: { teacher: TeacherModel }
 }

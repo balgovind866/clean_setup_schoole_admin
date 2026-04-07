@@ -8,7 +8,7 @@ import {
   createTeacher, getTeachers, getTeacherById,
   updateTeacherProfile, updateTeacherBank,
   addTeacherExperience, addTeacherDocument,
-  toggleTeacherStatus,
+  toggleTeacherStatus, updateTeacherPermissions,
 } from '../teachers/core/_requests'
 import {
   TeacherModel, TeacherExperience,
@@ -24,7 +24,46 @@ const GENDERS = ['male', 'female', 'other']
 const MARITAL_STATUSES = ['single', 'married', 'divorced', 'widowed']
 const EMPLOYMENT_TYPES = ['permanent', 'contractual', 'part-time', 'guest']
 
-type Tab = 'profile' | 'bank' | 'experience' | 'documents'
+// ─── All Available Teacher Permissions ───────────────────────────────────────
+const PERMISSION_GROUPS = [
+  {
+    label: 'Academic',
+    color: 'primary',
+    icon: 'ki-book-open',
+    perms: [
+      { key: 'view_students', label: 'View Students' },
+      { key: 'manage_exams', label: 'Manage Exams' },
+      { key: 'view_timetable', label: 'View Timetable' },
+      { key: 'manage_timetable', label: 'Manage Timetable' },
+      { key: 'view_results', label: 'View Results' },
+      { key: 'manage_results', label: 'Manage Results' },
+    ],
+  },
+  {
+    label: 'Attendance',
+    color: 'success',
+    icon: 'ki-calendar-tick',
+    perms: [
+      { key: 'mark_attendance', label: 'Mark Attendance' },
+      { key: 'view_attendance', label: 'View Attendance' },
+      { key: 'edit_attendance', label: 'Edit Attendance' },
+    ],
+  },
+  {
+    label: 'Administrative',
+    color: 'warning',
+    icon: 'ki-setting-2',
+    perms: [
+      { key: 'view_notices', label: 'View Notices' },
+      { key: 'manage_notices', label: 'Manage Notices' },
+      { key: 'view_fees', label: 'View Fees' },
+      { key: 'manage_library', label: 'Manage Library' },
+      { key: 'view_reports', label: 'View Reports' },
+    ],
+  },
+]
+
+type Tab = 'profile' | 'bank' | 'experience' | 'documents' | 'permissions'
 
 // ─── Completion Progress Bar ──────────────────────────────────────────────────
 const CompletionBar: FC<{ pct: number; status?: { profile: boolean; experience: boolean; documents: boolean; bank_details: boolean } }> = ({ pct, status }) => {
@@ -118,6 +157,9 @@ const TeachersPage: FC = () => {
   const [docForm, setDocForm] = useState<AddTeacherDocumentPayload>({ document_type: '', file_path: '' })
   const [documents, setDocuments] = useState<any[]>([])
 
+  // ─── Permissions State ───────────────────────────────────────────────────
+  const [selectedPerms, setSelectedPerms] = useState<string[]>([])
+
   // ─── Load Teachers ────────────────────────────────────────────────────────
   const fetchTeachers = useCallback(async () => {
     if (!schoolId) return
@@ -164,6 +206,7 @@ const TeachersPage: FC = () => {
       const { data } = await getTeacherById(schoolId, teacher.id)
       const t = data.data.teacher
       setSelectedTeacher(t)
+      setSelectedPerms(Array.isArray(t.permissions) ? t.permissions : [])
 
       if (t.profile) {
         setProfileForm({
@@ -269,6 +312,25 @@ const TeachersPage: FC = () => {
     } catch (err: any) {
       setListError(err.response?.data?.message || 'Failed to toggle status')
     }
+  }
+
+  const handleSavePermissions = async () => {
+    if (!selectedTeacher) return
+    setManageSaving(true); setManageError(null)
+    try {
+      await updateTeacherPermissions(schoolId, selectedTeacher.id, { permissions: selectedPerms })
+      manageToast('Permissions updated successfully!')
+      // update local selectedTeacher permissions
+      setSelectedTeacher(prev => prev ? { ...prev, permissions: selectedPerms } : prev)
+    } catch (err: any) {
+      setManageError(err.response?.data?.message || 'Error updating permissions')
+    } finally { setManageSaving(false) }
+  }
+
+  const togglePerm = (key: string) => {
+    setSelectedPerms(prev =>
+      prev.includes(key) ? prev.filter(p => p !== key) : [...prev, key]
+    )
   }
 
   // ─── Filter ───────────────────────────────────────────────────────────────
@@ -508,10 +570,11 @@ const TeachersPage: FC = () => {
           {/* Sidebar Tabs */}
           <div className='w-230px bg-light px-4 py-7 border-end border-gray-200 flex-shrink-0'>
             {[
-              { id: 'profile' as Tab, label: 'Personal Profile', icon: 'ki-user-edit', done: cs?.profile },
+                          { id: 'profile' as Tab, label: 'Personal Profile', icon: 'ki-user-edit', done: cs?.profile },
               { id: 'bank' as Tab, label: 'Bank Details', icon: 'ki-bank', done: cs?.bank_details },
               { id: 'experience' as Tab, label: 'Experience', icon: 'ki-briefcase', done: cs?.experience },
               { id: 'documents' as Tab, label: 'Documents', icon: 'ki-folder', done: cs?.documents },
+              { id: 'permissions' as Tab, label: 'Permissions', icon: 'ki-shield-tick', done: undefined },
             ].map(tab => (
               <div key={tab.id} className='mb-2'>
                 <div
@@ -674,6 +737,138 @@ const TeachersPage: FC = () => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* ─ Permissions Tab ─ */}
+            {activeTab === 'permissions' && (
+              <div>
+                <div className='d-flex align-items-center justify-content-between mb-6'>
+                  <div>
+                    <h4 className='fw-bold mb-1'>Teacher Permissions</h4>
+                    <p className='text-muted fs-7 mb-0'>Control what this teacher can access in the system.</p>
+                  </div>
+                  <div className='d-flex gap-2'>
+                    <button
+                      type='button'
+                      className='btn btn-sm btn-light-primary fw-semibold'
+                      onClick={() => {
+                        const all = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p.key))
+                        setSelectedPerms(all)
+                      }}
+                    >
+                      <i className='ki-duotone ki-check-circle fs-4'><span className='path1'></span><span className='path2'></span></i>
+                      Select All
+                    </button>
+                    <button
+                      type='button'
+                      className='btn btn-sm btn-light-danger fw-semibold'
+                      onClick={() => setSelectedPerms([])}
+                    >
+                      <i className='ki-duotone ki-cross-circle fs-4'><span className='path1'></span><span className='path2'></span></i>
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                {/* Current active permissions badge row */}
+                {selectedPerms.length > 0 && (
+                  <div className='mb-6 p-4 rounded-2 bg-light-primary border border-primary border-dashed'>
+                    <div className='fs-8 fw-bold text-primary mb-2'>
+                      <i className='ki-duotone ki-shield-tick fs-5 me-1'><span className='path1'></span><span className='path2'></span></i>
+                      {selectedPerms.length} Permission{selectedPerms.length !== 1 ? 's' : ''} Active
+                    </div>
+                    <div className='d-flex flex-wrap gap-1'>
+                      {selectedPerms.map(p => (
+                        <span key={p} className='badge badge-light-primary fs-9'>{p.replace(/_/g, ' ')}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Permission Groups */}
+                <div className='row g-5'>
+                  {PERMISSION_GROUPS.map(group => (
+                    <div key={group.label} className='col-12'>
+                      <div className={`card card-bordered border-${group.color} border-opacity-25`}>
+                        <div className={`card-header min-h-50px bg-light-${group.color} border-bottom-0`}>
+                          <div className='card-title'>
+                            <i className={`ki-duotone ${group.icon} fs-2 text-${group.color} me-2`}>
+                              <span className='path1'></span><span className='path2'></span>
+                            </i>
+                            <span className={`fw-bold fs-6 text-${group.color}`}>{group.label}</span>
+                            <span className={`badge badge-${group.color} ms-3 fs-9`}>
+                              {group.perms.filter(p => selectedPerms.includes(p.key)).length}/{group.perms.length}
+                            </span>
+                          </div>
+                          <div className='card-toolbar'>
+                            <button
+                              type='button'
+                              className={`btn btn-xs btn-light-${group.color} fw-semibold py-1 px-3 fs-8`}
+                              onClick={() => {
+                                const keys = group.perms.map(p => p.key)
+                                const allSelected = keys.every(k => selectedPerms.includes(k))
+                                if (allSelected) {
+                                  setSelectedPerms(prev => prev.filter(p => !keys.includes(p)))
+                                } else {
+                                  setSelectedPerms(prev => [...new Set([...prev, ...keys])])
+                                }
+                              }}
+                            >
+                              {group.perms.every(p => selectedPerms.includes(p.key)) ? 'Deselect All' : 'Select All'}
+                            </button>
+                          </div>
+                        </div>
+                        <div className='card-body py-4'>
+                          <div className='row g-3'>
+                            {group.perms.map(perm => (
+                              <div key={perm.key} className='col-md-4 col-sm-6'>
+                                <div
+                                  className={`d-flex align-items-center p-3 rounded-2 border cursor-pointer transition-all ${
+                                    selectedPerms.includes(perm.key)
+                                      ? `border-${group.color} bg-light-${group.color}`
+                                      : 'border-gray-200 bg-white'
+                                  }`}
+                                  style={{ cursor: 'pointer', transition: 'all 0.15s' }}
+                                  onClick={() => togglePerm(perm.key)}
+                                >
+                                  <div className={`form-check form-check-custom form-check-solid form-check-sm me-3`}>
+                                    <input
+                                      className='form-check-input'
+                                      type='checkbox'
+                                      checked={selectedPerms.includes(perm.key)}
+                                      onChange={() => togglePerm(perm.key)}
+                                      onClick={e => e.stopPropagation()}
+                                    />
+                                  </div>
+                                  <div>
+                                    <div className={`fw-semibold fs-7 ${selectedPerms.includes(perm.key) ? `text-${group.color}` : 'text-gray-700'}`}>
+                                      {perm.label}
+                                    </div>
+                                    <div className='text-muted fs-9'>{perm.key}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className='d-flex justify-content-end pt-7'>
+                  <Button
+                    variant='primary'
+                    onClick={handleSavePermissions}
+                    disabled={manageSaving}
+                  >
+                    {manageSaving
+                      ? <><span className='spinner-border spinner-border-sm me-2'></span>Saving...</>
+                      : <><i className='ki-duotone ki-shield-tick fs-4 me-2'><span className='path1'></span><span className='path2'></span></i>Save Permissions</>
+                    }
+                  </Button>
                 </div>
               </div>
             )}
