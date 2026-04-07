@@ -246,168 +246,145 @@ const AdmissionPage: FC = () => {
 
   return (
     <>
-
       <Content>
-        {/* ── Stats Cards ── */}
-        <div className='d-flex gap-3 flex-wrap mb-7'>
-          {[
-            { label: 'Total Students', value: stats.total, color: 'primary', bg: 'bg-light-primary', },
-            { label: 'Active', value: stats.active, color: 'success', bg: 'bg-light-success', },
-            { label: 'Enrolled', value: stats.enrolled, color: 'info', bg: 'bg-light-info', },
-          ].map(({ label, value, color, bg }) => (
-            <div key={label} className={`d-flex align-items-center gap-3 ${bg} rounded-3 px-4 py-3`} style={{ minWidth: 140 }}>
-              <div className={`symbol symbol-35px rounded-circle bg-${color} bg-opacity-15 d-flex align-items-center justify-content-center`}>
-                <i className={` fs-3 text-${color}`}><span className='path1' /><span className='path2' /></i>
-              </div>
-              <div>
-                <div className={`fs-4 fw-bold text-${color} lh-1`}>{loading ? '—' : value}</div>
-                <div className='text-gray-500 fw-semibold fs-8 mt-1'>{label}</div>
-              </div>
-            </div>
-          ))}
-        </div>
+        {listError && <div className='alert alert-danger mb-4'>{listError}</div>}
 
-        {listError && <div className='alert alert-danger mb-5'>{listError}</div>}
-
-        {/* ── Student List ── */}
+        {/* ── Students Table with compact stats in header ── */}
         <div className='card card-flush'>
-          <div className='card-header align-items-center py-5 gap-2 gap-md-5'>
-            <div className='card-title d-flex flex-column'>
-              <h3 className='fw-bold mb-1'>All Students</h3>
-              <span className='text-muted fs-7'>Detailed completion status shown below</span>
+          <div className='card-header align-items-center py-5 gap-3'>
+            {/* Title + compact stat pills */}
+            <div className='card-title'>
+              <h3 className='fw-bold mb-0 me-4'>Students</h3>
+              {!loading && (
+                <div className='d-flex align-items-center gap-3'>
+                  <span className='d-flex align-items-center gap-1 text-gray-600 fs-7 fw-semibold'>
+                    <span className='bullet bullet-dot bg-primary h-6px w-6px'></span>
+                    Total: <span className='text-primary fw-bold ms-1'>{stats.total}</span>
+                  </span>
+                  <span className='d-flex align-items-center gap-1 text-gray-600 fs-7 fw-semibold'>
+                    <span className='bullet bullet-dot bg-primary h-6px w-6px'></span>
+                    Active: <span className='text-primary fw-bold ms-1'>{stats.active}</span>
+                  </span>
+                  <span className='d-flex align-items-center gap-1 text-gray-600 fs-7 fw-semibold'>
+                    <span className='bullet bullet-dot bg-primary h-6px w-6px'></span>
+                    Enrolled: <span className='text-primary fw-bold ms-1'>{stats.enrolled}</span>
+                  </span>
+                </div>
+              )}
             </div>
+            {/* Search + Add button */}
             <div className='card-toolbar gap-3'>
-              <div className='d-flex align-items-center position-relative my-1'>
+              <div className='d-flex align-items-center position-relative'>
                 <i className='ki-duotone ki-magnifier fs-3 position-absolute ms-4'>
                   <span className='path1'></span><span className='path2'></span>
                 </i>
-                <input type='text' className='form-control form-control-solid w-250px ps-14'
-                  placeholder='Search students...' value={search} onChange={e => setSearch(e.target.value)} />
+                <input
+                  type='text'
+                  className='form-control form-control-solid w-200px ps-14'
+                  placeholder='Search...'
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
               </div>
-              <button className='btn btn-primary' onClick={() => setShowAdmitModal(true)}>
-                <i className='ki-duotone ki-plus fs-2'></i> Admit New Student
+              <button className='btn btn-primary btn-sm' onClick={() => setShowAdmitModal(true)}>
+                <i className='ki-duotone ki-plus fs-3'></i> Admit Student
               </button>
             </div>
           </div>
 
           <div className='card-body pt-0'>
             <div className='table-responsive'>
-              <table className='table align-middle table-row-dashed fs-6 gy-5'>
+              <table className='table align-middle table-row-dashed fs-7 gy-4'>
                 <thead>
-                  <tr className='text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0'>
-                    <th className='w-10px'>#</th>
-                    <th className='min-w-150px'>Student</th>
-                    <th>Basic</th>
+                  <tr className='text-start text-muted fw-bold fs-7 text-uppercase gs-0 border-bottom border-gray-100'>
+                    <th className='w-30px'>#</th>
+                    <th className='min-w-180px'>Student</th>
+                    <th>Mobile</th>
                     <th className='text-center'>Profile</th>
                     <th className='text-center'>Parent</th>
                     <th className='text-center'>Address</th>
                     <th className='text-center'>Docs</th>
                     <th className='text-center'>Enrolled</th>
-                    <th className='text-end'>Actions</th>
+                    <th>Status</th>
+                    <th className='text-end min-w-80px'>Actions</th>
                   </tr>
                 </thead>
-                <tbody className='fw-semibold text-gray-600'>
+                <tbody className='text-gray-600 fw-semibold'>
                   {loading ? (
-                    <tr><td colSpan={9} className='text-center py-10'>
-                      <span className='spinner-border spinner-border-sm text-primary me-2'></span>Loading...
+                    <tr><td colSpan={10} className='text-center py-10'>
+                      <span className='spinner-border spinner-border-sm text-primary me-2'></span>
+                      <span className='text-muted'>Loading students...</span>
                     </td></tr>
                   ) : filtered.length === 0 ? (
-                    <tr><td colSpan={9} className='text-center py-12'>
-                      <div className='text-muted'>No students found. Click "Admit New Student" to begin.</div>
+                    <tr><td colSpan={10} className='text-center py-12'>
+                      <div className='d-flex flex-column align-items-center'>
+                        <i className='ki-duotone ki-people fs-3x text-gray-300 mb-3'><span className='path1'></span><span className='path2'></span><span className='path3'></span><span className='path4'></span><span className='path5'></span></i>
+                        <div className='text-muted fs-6'>No students found.</div>
+                        <button className='btn btn-sm btn-light-primary mt-3' onClick={() => setShowAdmitModal(true)}>Admit First Student</button>
+                      </div>
                     </td></tr>
                   ) : filtered.map((s, idx) => {
-                    // Resilient checks for objects or arrays to handle multiple variations from backend API
-                    const hasProfile = s.profile && (Array.isArray(s.profile) ? s.profile.length > 0 : Object.keys(s.profile).length > 0);
-                    const hasParent = s.parent && (Array.isArray(s.parent) ? s.parent.length > 0 : Object.keys(s.parent).length > 0);
-
-                    const addrObj = s.address || (s as any).addresses;
-                    const hasAddress = Array.isArray(addrObj) ? addrObj.length > 0 : !!addrObj && Object.keys(addrObj).length > 0;
-
-                    const docsObj = s.documents || (s as any).document;
-                    const docsArray = Array.isArray(docsObj) ? docsObj : (docsObj ? [docsObj] : []);
-                    const docsCount = docsArray.length;
-                    const verifiedCount = docsArray.filter((d: any) => d.verification_status === 'Verified').length;
-                    const pendingCount = docsArray.filter((d: any) => d.verification_status === 'Pending').length;
-                    const rejectedCount = docsArray.filter((d: any) => d.verification_status === 'Rejected').length;
-
-                    const enrollObj = s.enrollments || (s as any).enrollment;
-                    const hasEnrollment = Array.isArray(enrollObj) ? enrollObj.length > 0 : !!enrollObj && Object.keys(enrollObj).length > 0;
+                    const hasProfile = s.profile && (Array.isArray(s.profile) ? s.profile.length > 0 : Object.keys(s.profile).length > 0)
+                    const hasParent = s.parent && (Array.isArray(s.parent) ? s.parent.length > 0 : Object.keys(s.parent).length > 0)
+                    const addrObj = s.address || (s as any).addresses
+                    const hasAddress = Array.isArray(addrObj) ? addrObj.length > 0 : !!addrObj && Object.keys(addrObj).length > 0
+                    const docsObj = s.documents || (s as any).document
+                    const docsArray = Array.isArray(docsObj) ? docsObj : (docsObj ? [docsObj] : [])
+                    const docsCount = docsArray.length
+                    const enrollObj = s.enrollments || (s as any).enrollment
+                    const hasEnrollment = Array.isArray(enrollObj) ? enrollObj.length > 0 : !!enrollObj && Object.keys(enrollObj).length > 0
 
                     return (
                       <tr key={s.id}>
-                        <td><span className='text-gray-500'>{idx + 1}</span></td>
+                        <td className='text-gray-400 fs-8'>{idx + 1}</td>
                         <td>
                           <div className='d-flex align-items-center'>
-                            <div className='symbol symbol-40px me-3'>
-                              <div className='symbol-label fs-3 fw-bold text-primary bg-light-primary'>
+                            <div className='symbol symbol-35px me-3'>
+                              <div className='symbol-label fs-5 fw-bold text-white bg-primary'>
                                 {s.first_name.charAt(0).toUpperCase()}
                               </div>
                             </div>
                             <div>
-                              <div className='text-gray-800 fw-bold'>{s.first_name} {s.last_name}</div>
-                              <div className='text-muted fs-7'>{s.email}</div>
+                              <div className='text-gray-800 fw-bold fs-6'>{s.first_name} {s.last_name}</div>
+                              <div className='text-muted fs-8'>{s.email}</div>
                             </div>
                           </div>
                         </td>
                         <td>
-                          <div className='text-gray-800 fw-bold fs-7 mb-2'>{s.mobile_number}</div>
-                          <div
-                            className='d-flex align-items-center gap-2 cursor-pointer'
-                            onClick={() => handleToggleStatus(s)}
-                          >
-                            {/* Circular toggle button like in image */}
-                            <div
-                              style={{
-                                width: 20,
-                                height: 20,
-                                borderRadius: '50%',
-                                border: `3px solid ${s.is_active ? '#7F77DD' : '#ccc'}`,
-                                backgroundColor: s.is_active ? 'transparent' : 'transparent',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: 'border-color 0.2s',
-                                flexShrink: 0,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: 10,
-                                  height: 10,
-                                  borderRadius: '50%',
-                                  backgroundColor: s.is_active ? '#7F77DD' : '#ccc',
-                                  transition: 'background-color 0.2s',
-                                }}
-                              />
-                            </div>
-                            <label
-                              className={`fs-8 fw-bold cursor-pointer mb-0 ${s.is_active ? 'text-success' : 'text-danger'
-                                }`}
-                            >
-                              {s.is_active ? 'Active' : 'Inactive'}
-                            </label>
-                          </div>
-                        </td>                      <td className='text-center'><CheckIcon exists={!!hasProfile} /></td>
+                          <span className='text-gray-700 fs-7'>{s.mobile_number || '—'}</span>
+                        </td>
+                        <td className='text-center'><CheckIcon exists={!!hasProfile} /></td>
                         <td className='text-center'><CheckIcon exists={!!hasParent} /></td>
                         <td className='text-center'><CheckIcon exists={!!hasAddress} /></td>
-                        <td className='text-center text-muted'>
-                          {docsCount > 0 ? (
-                            <div className='d-flex flex-column align-items-center gap-1'>
-                              <span className='badge badge-light-primary'>{docsCount} Doc{docsCount > 1 ? 's' : ''}</span>
-                              {verifiedCount > 0 && <span className='badge badge-light-success fs-9 px-1 py-1'>{verifiedCount} Verified</span>}
-                              {pendingCount > 0 && <span className='badge badge-light-warning fs-9 px-1 py-1'>{pendingCount} Pending</span>}
-                              {rejectedCount > 0 && <span className='badge badge-light-danger fs-9 px-1 py-1'>{rejectedCount} Rejected</span>}
-                            </div>
-                          ) : <span className='text-gray-400'>0 Docs</span>}
+                        <td className='text-center'>
+                          {docsCount > 0
+                            ? <span className='badge badge-light-primary'>{docsCount}</span>
+                            : <CheckIcon exists={false} />}
                         </td>
                         <td className='text-center'>
-                          {hasEnrollment ? (
-                            <span className='badge badge-light-success'>Yes</span>
-                          ) : <span className='badge badge-light-warning'>Pending</span>}
+                          {hasEnrollment
+                            ? <span className='badge badge-light-primary'>Yes</span>
+                            : <span className='badge badge-light fs-8 text-gray-400'>No</span>}
+                        </td>
+                        <td>
+                          <div className='form-check form-switch form-check-custom form-check-solid form-check-sm'>
+                            <input
+                              className='form-check-input'
+                              type='checkbox'
+                              checked={s.is_active}
+                              onChange={() => handleToggleStatus(s)}
+                            />
+                            <span className={`fs-8 fw-semibold ms-2 ${s.is_active ? 'text-primary' : 'text-gray-400'}`}>
+                              {s.is_active ? 'Active' : 'Off'}
+                            </span>
+                          </div>
                         </td>
                         <td className='text-end'>
-                          <button className='btn btn-sm btn-light-primary fw-bold' onClick={() => openManageModal(s)}>
-                            <i className='ki-duotone ki-setting-2 fs-4 me-1'><span className='path1'></span><span className='path2'></span></i> Manage
+                          <button
+                            className='btn btn-sm btn-light-primary fw-semibold'
+                            onClick={() => openManageModal(s)}
+                          >
+                            Manage
                           </button>
                         </td>
                       </tr>
@@ -415,11 +392,6 @@ const AdmissionPage: FC = () => {
                   })}
                 </tbody>
               </table>
-            </div>
-
-            <div className='mt-3 text-muted fs-8 d-flex align-items-center'>
-              <i className='ki-duotone ki-information-4 fs-3 me-2 text-primary'><span className='path1'></span><span className='path2'></span><span className='path3'></span></i>
-              Note: If columns display 'Missing' even after filling details, your backend API `GET /students` may need to include relations (`profile`, `parent`, `address`, `documents`, `enrollments`).
             </div>
           </div>
         </div>

@@ -24,43 +24,20 @@ const GENDERS = ['male', 'female', 'other']
 const MARITAL_STATUSES = ['single', 'married', 'divorced', 'widowed']
 const EMPLOYMENT_TYPES = ['permanent', 'contractual', 'part-time', 'guest']
 
-// ─── All Available Teacher Permissions ───────────────────────────────────────
-const PERMISSION_GROUPS = [
-  {
-    label: 'Academic',
-    color: 'primary',
-    icon: 'ki-book-open',
-    perms: [
-      { key: 'view_students', label: 'View Students' },
-      { key: 'manage_exams', label: 'Manage Exams' },
-      { key: 'view_timetable', label: 'View Timetable' },
-      { key: 'manage_timetable', label: 'Manage Timetable' },
-      { key: 'view_results', label: 'View Results' },
-      { key: 'manage_results', label: 'Manage Results' },
-    ],
-  },
-  {
-    label: 'Attendance',
-    color: 'success',
-    icon: 'ki-calendar-tick',
-    perms: [
-      { key: 'mark_attendance', label: 'Mark Attendance' },
-      { key: 'view_attendance', label: 'View Attendance' },
-      { key: 'edit_attendance', label: 'Edit Attendance' },
-    ],
-  },
-  {
-    label: 'Administrative',
-    color: 'warning',
-    icon: 'ki-setting-2',
-    perms: [
-      { key: 'view_notices', label: 'View Notices' },
-      { key: 'manage_notices', label: 'Manage Notices' },
-      { key: 'view_fees', label: 'View Fees' },
-      { key: 'manage_library', label: 'Manage Library' },
-      { key: 'view_reports', label: 'View Reports' },
-    ],
-  },
+// ─── Teacher Permission Modules (View + Manage per module) ───────────────────
+const PERMISSION_MODULES = [
+  { key: 'students',      label: 'Students' },
+  { key: 'attendance',    label: 'Attendance' },
+  { key: 'timetable',     label: 'Timetable' },
+  { key: 'exams',         label: 'Examinations' },
+  { key: 'results',       label: 'Results' },
+  { key: 'fees',          label: 'Fees' },
+  { key: 'library',       label: 'Library' },
+  { key: 'communication', label: 'Communication' },
+  { key: 'notices',       label: 'Notices' },
+  { key: 'reports',       label: 'Reports' },
+  { key: 'transport',     label: 'Transport' },
+  { key: 'hostel',        label: 'Hostel' },
 ]
 
 type Tab = 'profile' | 'bank' | 'experience' | 'documents' | 'permissions'
@@ -349,112 +326,111 @@ const TeachersPage: FC = () => {
 
   return (
     <>
-
       <Content>
-        {/* ── Stats ── */}
-        <div className='row g-5 mb-7'>
-          {[
-            { label: 'Total Teachers', value: stats.total, color: 'primary', icon: 'ki-duotone ki-teacher' },
-            { label: 'Active', value: stats.active, color: 'success', icon: 'ki-duotone ki-verify' },
-            { label: '100% Complete', value: stats.complete, color: 'info', icon: 'ki-duotone ki-check-circle' },
-          ].map(({ label, value, color, icon }) => (
-            <div className='col-sm-6 col-xl-4' key={label}>
-              <div className={`card card-flush bg-light-${color} border-0`}>
-                <div className='card-body d-flex align-items-center py-5'>
-                  <div className={`symbol symbol-50px me-4 bg-${color} bg-opacity-15 rounded-circle`}>
-                    <div className='symbol-label d-flex align-items-center justify-content-center'>
-                      <i className={`${icon} fs-2x text-${color}`}><span className='path1'></span><span className='path2'></span></i>
-                    </div>
-                  </div>
-                  <div>
-                    <div className={`fs-2 fw-bolder text-${color}`}>{loading ? '—' : value}</div>
-                    <div className='text-gray-600 fw-semibold fs-7'>{label}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
 
-        {listError && <div className='alert alert-danger mb-5'>{listError}</div>}
-        {listSuccess && <div className='alert alert-success mb-5'>{listSuccess}</div>}
+        {listError && <div className='alert alert-danger mb-4'>{listError}</div>}
+        {listSuccess && <div className='alert alert-success mb-4'>{listSuccess}</div>}
 
-        {/* ── Teachers Table ── */}
+        {/* ── Teachers Table with compact stats in header ── */}
         <div className='card card-flush'>
           <div className='card-header align-items-center py-5 gap-3'>
-            <div className='card-title d-flex flex-column'>
-              <h3 className='fw-bold mb-0'>All Teachers</h3>
-              <span className='text-muted fs-7'>Completion status shown per teacher</span>
+            {/* Title + compact stat pills */}
+            <div className='card-title'>
+              <h3 className='fw-bold mb-0 me-4'>Teachers</h3>
+              {!loading && (
+                <div className='d-flex align-items-center gap-3'>
+                  <span className='d-flex align-items-center gap-1 text-gray-600 fs-7 fw-semibold'>
+                    <span className='bullet bullet-dot bg-primary h-6px w-6px'></span>
+                    Total: <span className='text-primary fw-bold ms-1'>{stats.total}</span>
+                  </span>
+                  <span className='d-flex align-items-center gap-1 text-gray-600 fs-7 fw-semibold'>
+                    <span className='bullet bullet-dot bg-primary h-6px w-6px'></span>
+                    Active: <span className='text-primary fw-bold ms-1'>{stats.active}</span>
+                  </span>
+                  <span className='d-flex align-items-center gap-1 text-gray-600 fs-7 fw-semibold'>
+                    <span className='bullet bullet-dot bg-primary h-6px w-6px'></span>
+                    Complete: <span className='text-primary fw-bold ms-1'>{stats.complete}</span>
+                  </span>
+                </div>
+              )}
             </div>
+            {/* Search + Add button */}
             <div className='card-toolbar gap-3'>
               <div className='d-flex align-items-center position-relative'>
                 <i className='ki-duotone ki-magnifier fs-3 position-absolute ms-4'>
                   <span className='path1'></span><span className='path2'></span>
                 </i>
-                <input type='text' className='form-control form-control-solid w-250px ps-14'
-                  placeholder='Search teachers...' value={search} onChange={e => setSearch(e.target.value)} />
+                <input
+                  type='text'
+                  className='form-control form-control-solid w-200px ps-14'
+                  placeholder='Search...'
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
               </div>
-              <button className='btn btn-primary' onClick={() => setShowCreateModal(true)}>
-                <i className='ki-duotone ki-plus fs-2'></i> Add Teacher
+              <button className='btn btn-primary btn-sm' onClick={() => setShowCreateModal(true)}>
+                <i className='ki-duotone ki-plus fs-3'></i> Add Teacher
               </button>
             </div>
           </div>
 
           <div className='card-body pt-0'>
             <div className='table-responsive'>
-              <table className='table align-middle table-row-dashed fs-6 gy-5'>
+              <table className='table align-middle table-row-dashed fs-7 gy-4'>
                 <thead>
-                  <tr className='text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0'>
-                    <th>#</th>
-                    <th className='min-w-150px'>Teacher</th>
-                    <th>Employment</th>
+                  <tr className='text-start text-muted fw-bold fs-7 text-uppercase gs-0 border-bottom border-gray-100'>
+                    <th className='w-30px'>#</th>
+                    <th className='min-w-180px'>Teacher</th>
+                    <th>Type</th>
                     <th className='text-center'>Profile</th>
                     <th className='text-center'>Bank</th>
                     <th className='text-center'>Exp</th>
                     <th className='text-center'>Docs</th>
-                    <th className='min-w-130px'>Completion</th>
+                    <th className='min-w-100px'>Completion</th>
                     <th>Status</th>
-                    <th className='text-end'>Actions</th>
+                    <th className='text-end min-w-80px'>Actions</th>
                   </tr>
                 </thead>
-                <tbody className='fw-semibold text-gray-600'>
+                <tbody className='text-gray-600 fw-semibold'>
                   {loading ? (
                     <tr><td colSpan={10} className='text-center py-10'>
-                      <span className='spinner-border spinner-border-sm text-primary me-2'></span>Loading...
+                      <span className='spinner-border spinner-border-sm text-primary me-2'></span>
+                      <span className='text-muted'>Loading teachers...</span>
                     </td></tr>
                   ) : filtered.length === 0 ? (
                     <tr><td colSpan={10} className='text-center py-12'>
-                      <div className='text-muted'>No teachers found. Click "Add Teacher" to begin.</div>
+                      <div className='d-flex flex-column align-items-center'>
+                        <i className='ki-duotone ki-teacher fs-3x text-gray-300 mb-3'><span className='path1'></span><span className='path2'></span></i>
+                        <div className='text-muted fs-6'>No teachers found.</div>
+                        <button className='btn btn-sm btn-light-primary mt-3' onClick={() => setShowCreateModal(true)}>Add First Teacher</button>
+                      </div>
                     </td></tr>
                   ) : filtered.map((t, idx) => {
                     const cs = t.completion_status
                     const pct = t.completion_percentage ?? 0
-
-                    const docsArr = Array.isArray(t.documents) ? t.documents : []
-                    const docsCount = docsArr.length
+                    const docsCount = Array.isArray(t.documents) ? t.documents.length : 0
 
                     return (
                       <tr key={t.id}>
-                        <td className='text-gray-500'>{idx + 1}</td>
+                        <td className='text-gray-400 fs-8'>{idx + 1}</td>
                         <td>
                           <div className='d-flex align-items-center'>
-                            <div className='symbol symbol-40px me-3'>
-                              <div className={`symbol-label fs-3 fw-bold text-white ${pct === 100 ? 'bg-success' : pct >= 50 ? 'bg-warning' : 'bg-primary'}`}>
+                            <div className='symbol symbol-35px me-3'>
+                              <div className='symbol-label fs-5 fw-bold text-white bg-primary'>
                                 {t.name.charAt(0).toUpperCase()}
                               </div>
                             </div>
                             <div>
-                              <div className='text-gray-800 fw-bold'>{t.name}</div>
-                              <div className='text-muted fs-7'>{t.email}</div>
+                              <div className='text-gray-800 fw-bold fs-6'>{t.name}</div>
+                              <div className='text-muted fs-8'>{t.email}</div>
                             </div>
                           </div>
                         </td>
                         <td>
-                          <div className='text-gray-700 fw-semibold'>{t.profession?.name || '—'}</div>
-                          <span className='badge badge-light-info fs-8'>{t.employment_type || '—'}</span>
+                          <span className='badge badge-light-primary fs-8'>{t.employment_type || '—'}</span>
                         </td>
                         <td className='text-center'><CheckIcon exists={!!cs?.profile} title='Profile' /></td>
-                        <td className='text-center'><CheckIcon exists={!!cs?.bank_details} title='Bank Details' /></td>
+                        <td className='text-center'><CheckIcon exists={!!cs?.bank_details} title='Bank' /></td>
                         <td className='text-center'><CheckIcon exists={!!cs?.experience} title='Experience' /></td>
                         <td className='text-center'>
                           {docsCount > 0
@@ -462,20 +438,35 @@ const TeachersPage: FC = () => {
                             : <CheckIcon exists={false} title='Documents' />}
                         </td>
                         <td>
-                          <CompletionBar pct={pct} />
+                          <div className='d-flex align-items-center gap-2'>
+                            <div className='progress h-6px w-70px bg-light-primary rounded'>
+                              <div
+                                className='progress-bar bg-primary rounded'
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className='text-primary fw-bold fs-8'>{pct}%</span>
+                          </div>
                         </td>
                         <td>
                           <div className='form-check form-switch form-check-custom form-check-solid form-check-sm'>
-                            <input className='form-check-input cursor-pointer' type='checkbox'
-                              checked={t.is_active} onChange={() => handleToggleStatus(t)} />
-                            <label className={`form-check-label fs-8 fw-bold ms-2 ${t.is_active ? 'text-success' : 'text-danger'}`}>
-                              {t.is_active ? 'Active' : 'Inactive'}
-                            </label>
+                            <input
+                              className='form-check-input'
+                              type='checkbox'
+                              checked={t.is_active}
+                              onChange={() => handleToggleStatus(t)}
+                            />
+                            <span className={`fs-8 fw-semibold ms-2 ${t.is_active ? 'text-primary' : 'text-gray-400'}`}>
+                              {t.is_active ? 'Active' : 'Off'}
+                            </span>
                           </div>
                         </td>
                         <td className='text-end'>
-                          <button className='btn btn-sm btn-light-primary fw-bold' onClick={() => openManageModal(t)}>
-                            <i className='ki-duotone ki-setting-2 fs-4'><span className='path1'></span><span className='path2'></span></i> Manage
+                          <button
+                            className='btn btn-sm btn-light-primary fw-semibold'
+                            onClick={() => openManageModal(t)}
+                          >
+                            Manage
                           </button>
                         </td>
                       </tr>
@@ -744,129 +735,59 @@ const TeachersPage: FC = () => {
             {/* ─ Permissions Tab ─ */}
             {activeTab === 'permissions' && (
               <div>
-                <div className='d-flex align-items-center justify-content-between mb-6'>
-                  <div>
-                    <h4 className='fw-bold mb-1'>Teacher Permissions</h4>
-                    <p className='text-muted fs-7 mb-0'>Control what this teacher can access in the system.</p>
-                  </div>
-                  <div className='d-flex gap-2'>
-                    <button
-                      type='button'
-                      className='btn btn-sm btn-light-primary fw-semibold'
-                      onClick={() => {
-                        const all = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p.key))
-                        setSelectedPerms(all)
-                      }}
-                    >
-                      <i className='ki-duotone ki-check-circle fs-4'><span className='path1'></span><span className='path2'></span></i>
-                      Select All
-                    </button>
-                    <button
-                      type='button'
-                      className='btn btn-sm btn-light-danger fw-semibold'
-                      onClick={() => setSelectedPerms([])}
-                    >
-                      <i className='ki-duotone ki-cross-circle fs-4'><span className='path1'></span><span className='path2'></span></i>
-                      Clear All
-                    </button>
-                  </div>
-                </div>
+                <p className='text-muted fs-7 mb-6'>Select the modules this teacher can view or manage.</p>
 
-                {/* Current active permissions badge row */}
-                {selectedPerms.length > 0 && (
-                  <div className='mb-6 p-4 rounded-2 bg-light-primary border border-primary border-dashed'>
-                    <div className='fs-8 fw-bold text-primary mb-2'>
-                      <i className='ki-duotone ki-shield-tick fs-5 me-1'><span className='path1'></span><span className='path2'></span></i>
-                      {selectedPerms.length} Permission{selectedPerms.length !== 1 ? 's' : ''} Active
-                    </div>
-                    <div className='d-flex flex-wrap gap-1'>
-                      {selectedPerms.map(p => (
-                        <span key={p} className='badge badge-light-primary fs-9'>{p.replace(/_/g, ' ')}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Permission Groups */}
-                <div className='row g-5'>
-                  {PERMISSION_GROUPS.map(group => (
-                    <div key={group.label} className='col-12'>
-                      <div className={`card card-bordered border-${group.color} border-opacity-25`}>
-                        <div className={`card-header min-h-50px bg-light-${group.color} border-bottom-0`}>
-                          <div className='card-title'>
-                            <i className={`ki-duotone ${group.icon} fs-2 text-${group.color} me-2`}>
-                              <span className='path1'></span><span className='path2'></span>
-                            </i>
-                            <span className={`fw-bold fs-6 text-${group.color}`}>{group.label}</span>
-                            <span className={`badge badge-${group.color} ms-3 fs-9`}>
-                              {group.perms.filter(p => selectedPerms.includes(p.key)).length}/{group.perms.length}
-                            </span>
-                          </div>
-                          <div className='card-toolbar'>
-                            <button
-                              type='button'
-                              className={`btn btn-xs btn-light-${group.color} fw-semibold py-1 px-3 fs-8`}
-                              onClick={() => {
-                                const keys = group.perms.map(p => p.key)
-                                const allSelected = keys.every(k => selectedPerms.includes(k))
-                                if (allSelected) {
-                                  setSelectedPerms(prev => prev.filter(p => !keys.includes(p)))
-                                } else {
-                                  setSelectedPerms(prev => [...new Set([...prev, ...keys])])
-                                }
-                              }}
+                <div className='row g-4'>
+                  {PERMISSION_MODULES.map(mod => {
+                    const viewKey = `view_${mod.key}`
+                    const manageKey = `manage_${mod.key}`
+                    const hasView = selectedPerms.includes(viewKey)
+                    const hasManage = selectedPerms.includes(manageKey)
+                    return (
+                      <div key={mod.key} className='col-md-4 col-sm-6'>
+                        <div className='border border-gray-200 rounded-2 p-4 h-100' style={{ background: '#fff' }}>
+                          <div className='fw-bold text-gray-800 fs-6 mb-3'>{mod.label}</div>
+                          <div className='d-flex gap-4'>
+                            <label
+                              className='d-flex align-items-center gap-2 cursor-pointer'
+                              style={{ cursor: 'pointer' }}
                             >
-                              {group.perms.every(p => selectedPerms.includes(p.key)) ? 'Deselect All' : 'Select All'}
-                            </button>
-                          </div>
-                        </div>
-                        <div className='card-body py-4'>
-                          <div className='row g-3'>
-                            {group.perms.map(perm => (
-                              <div key={perm.key} className='col-md-4 col-sm-6'>
-                                <div
-                                  className={`d-flex align-items-center p-3 rounded-2 border cursor-pointer transition-all ${
-                                    selectedPerms.includes(perm.key)
-                                      ? `border-${group.color} bg-light-${group.color}`
-                                      : 'border-gray-200 bg-white'
-                                  }`}
-                                  style={{ cursor: 'pointer', transition: 'all 0.15s' }}
-                                  onClick={() => togglePerm(perm.key)}
-                                >
-                                  <div className={`form-check form-check-custom form-check-solid form-check-sm me-3`}>
-                                    <input
-                                      className='form-check-input'
-                                      type='checkbox'
-                                      checked={selectedPerms.includes(perm.key)}
-                                      onChange={() => togglePerm(perm.key)}
-                                      onClick={e => e.stopPropagation()}
-                                    />
-                                  </div>
-                                  <div>
-                                    <div className={`fw-semibold fs-7 ${selectedPerms.includes(perm.key) ? `text-${group.color}` : 'text-gray-700'}`}>
-                                      {perm.label}
-                                    </div>
-                                    <div className='text-muted fs-9'>{perm.key}</div>
-                                  </div>
-                                </div>
+                              <div className='form-check form-check-custom form-check-solid form-check-sm mb-0'>
+                                <input
+                                  className='form-check-input'
+                                  type='checkbox'
+                                  checked={hasView}
+                                  onChange={() => togglePerm(viewKey)}
+                                />
                               </div>
-                            ))}
+                              <span className={`fs-7 fw-semibold ${hasView ? 'text-primary' : 'text-gray-600'}`}>View</span>
+                            </label>
+                            <label
+                              className='d-flex align-items-center gap-2 cursor-pointer'
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <div className='form-check form-check-custom form-check-solid form-check-sm mb-0'>
+                                <input
+                                  className='form-check-input'
+                                  type='checkbox'
+                                  checked={hasManage}
+                                  onChange={() => togglePerm(manageKey)}
+                                />
+                              </div>
+                              <span className={`fs-7 fw-semibold ${hasManage ? 'text-primary' : 'text-gray-600'}`}>Manage</span>
+                            </label>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
 
-                <div className='d-flex justify-content-end pt-7'>
-                  <Button
-                    variant='primary'
-                    onClick={handleSavePermissions}
-                    disabled={manageSaving}
-                  >
+                <div className='d-flex justify-content-end pt-8'>
+                  <Button variant='primary' onClick={handleSavePermissions} disabled={manageSaving}>
                     {manageSaving
                       ? <><span className='spinner-border spinner-border-sm me-2'></span>Saving...</>
-                      : <><i className='ki-duotone ki-shield-tick fs-4 me-2'><span className='path1'></span><span className='path2'></span></i>Save Permissions</>
+                      : 'Save Permissions'
                     }
                   </Button>
                 </div>
