@@ -150,11 +150,19 @@ const SidebarMenuMain = () => {
           )}
 
           {hasPermission('communication') && (
+            <SidebarMenuItem 
+              to='/communication/notice-board' 
+              title='Notice Board' 
+              icon='message-text-2' 
+              fontIcon='bi-megaphone' 
+            />
+          )}
+
+          {hasPermission('communication') && (
             <SidebarMenuItemWithSub to='/communication' title='Communication' icon='message-text' fontIcon='bi-chat-dots'>
               <SidebarMenuItem to='/communication/announcements' title='Announcements' hasBullet={true} />
               <SidebarMenuItem to='/communication/notifications' title='Notifications' hasBullet={true} />
               <SidebarMenuItem to='/communication/messaging' title='Messaging' hasBullet={true} />
-              <SidebarMenuItem to='/communication/notice-board' title='Notice Board' hasBullet={true} />
             </SidebarMenuItemWithSub>
           )}
 

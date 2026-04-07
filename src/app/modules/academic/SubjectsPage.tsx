@@ -20,12 +20,11 @@ const SUBJECT_TYPES = ['theory', 'practical', 'both'] as const
 const SUBJECT_CATEGORIES = ['compulsory', 'elective'] as const
 
 // ─── Badge helpers ─────────────────────────────────────────────────────────
-const TypeBadge: FC<{ type: string }> = ({ type }) => {
-  const c = type === 'practical' ? 'warning' : type === 'both' ? 'info' : 'primary'
-  return <span className={`badge badge-light-${c} fw-bold`}>{type}</span>
-}
+const TypeBadge: FC<{ type: string }> = ({ type }) => (
+  <span className='badge badge-light-primary fw-semibold'>{type}</span>
+)
 const CatBadge: FC<{ cat: string }> = ({ cat }) => (
-  <span className={`badge badge-light-${cat === 'elective' ? 'warning' : 'success'}`}>{cat}</span>
+  <span className='badge badge-light fw-semibold text-gray-700'>{cat}</span>
 )
 
 const SubjectsPage: FC = () => {
@@ -329,7 +328,7 @@ const SubjectsPage: FC = () => {
                         <td><CatBadge cat={s.category} /></td>
                         <td className='text-muted fs-7 mw-200px text-truncate'>{s.description || '—'}</td>
                         <td>
-                          <span className={`badge badge-light-${s.is_active ? 'success' : 'danger'}`}>
+                          <span className={`badge badge-light fw-semibold ${s.is_active ? 'text-success' : 'text-muted'}`}>
                             {s.is_active ? 'Active' : 'Inactive'}
                           </span>
                         </td>
