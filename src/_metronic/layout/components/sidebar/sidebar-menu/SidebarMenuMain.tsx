@@ -199,6 +199,7 @@ const SidebarMenuMain = () => {
           {hasPermission('settings') && (
             <SidebarMenuItemWithSub to='/settings' title='Settings' icon='setting-2' fontIcon='bi-gear'>
               <SidebarMenuItem to='/settings/profile' title='School Profile' hasBullet={true} />
+              <SidebarMenuItem to='/settings/app-management' title='App Management' hasBullet={true} />
               <SidebarMenuItem to='/settings/academic-year' title='Academic Year' hasBullet={true} />
               <SidebarMenuItem to='/settings/roles' title='Roles & Permissions' hasBullet={true} />
               <SidebarMenuItem to='/settings/preferences' title='Preferences' hasBullet={true} />

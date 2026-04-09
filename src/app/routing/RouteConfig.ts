@@ -102,6 +102,7 @@ export const reportRoutes = {
 // Settings Module Routes
 export const settingsRoutes = {
     profile: lazyLoad(() => import('../modules/settings/ProfilePage'), 'SchoolProfileWrapper'),
+    appManagement: lazyLoad(() => import('../modules/settings/AppManagementPage'), 'AppManagementWrapper'),
     academicYear: lazyLoad(() => import('../modules/settings/AcademicYearPage'), 'AcademicYearWrapper'),
     roles: lazyLoad(() => import('../modules/settings/RolesPage'), 'RolesWrapper'),
     preferences: lazyLoad(() => import('../modules/settings/PreferencesPage'), 'PreferencesWrapper'),

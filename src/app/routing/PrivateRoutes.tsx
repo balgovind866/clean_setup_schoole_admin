@@ -162,6 +162,7 @@ const PrivateRoutes = () => {
 
         {/* Settings */}
         <Route path='settings/profile' element={<SuspensedView><RouteConfig.settingsRoutes.profile /></SuspensedView>} />
+        <Route path='settings/app-management' element={<SuspensedView><RouteConfig.settingsRoutes.appManagement /></SuspensedView>} />
         <Route path='settings/academic-year' element={<SuspensedView><RouteConfig.settingsRoutes.academicYear /></SuspensedView>} />
         <Route path='settings/roles' element={<SuspensedView><RouteConfig.settingsRoutes.roles /></SuspensedView>} />
         <Route path='settings/preferences' element={<SuspensedView><RouteConfig.settingsRoutes.preferences /></SuspensedView>} />
