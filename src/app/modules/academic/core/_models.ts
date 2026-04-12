@@ -227,8 +227,9 @@ export interface TeacherAllocationModel {
   id: number;
   teacher_id: number;
   class_section_id: number;
-  subject_id: number;
+  subject_id: number | null;
   academic_session_id: number;
+  is_class_teacher: boolean;
   createdAt?: string;
   updatedAt?: string;
   teacher?: { id: number; name: string };
@@ -238,6 +239,20 @@ export interface TeacherAllocationModel {
     class?: { id: number; name: string };
     section?: { id: number; name: string };
   };
+}
+
+// ─── Session-aware Class Teacher Assignment ───────────────────────────────────
+
+export interface ClassTeacherSessionPayload {
+  teacher_id: number;
+  class_section_id: number;
+  academic_session_id: number;
+}
+
+export interface ClassTeacherSessionResponse {
+  success: boolean;
+  message: string;
+  data: TeacherAllocationModel;
 }
 
 export interface TeacherAllocationPayload {

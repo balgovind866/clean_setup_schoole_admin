@@ -1,6 +1,5 @@
 import { FC, useState, useEffect, useCallback } from 'react'
 import { PageTitle } from '../../../_metronic/layout/core'
-import { ToolbarWrapper } from '../../../_metronic/layout/components/toolbar'
 import { Content } from '../../../_metronic/layout/components/content'
 import { useAuth } from '../auth'
 import {
@@ -12,6 +11,8 @@ import {
   allocateTeacher,
   updateTeacherAllocation,
   deleteTeacherAllocation,
+  assignClassTeacherBySession,
+  getClassTeachersForSession,
 } from './core/_requests'
 import { getTeachers } from '../teachers/core/_requests'
 import {
@@ -41,6 +42,15 @@ interface RowState {
   error: string | null
 }
 
+interface ClassTeacherState {
+  allocationId: number | null
+  currentTeacherId: number | null
+  selectedTeacherId: string
+  saving: boolean
+  saved: boolean
+  error: string | null
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const MappingPage: FC = () => {
@@ -57,6 +67,16 @@ const MappingPage: FC = () => {
   const [sessionId, setSessionId] = useState<string>('')
   const [classId, setClassId] = useState<string>('')
   const [classSectionId, setClassSectionId] = useState<string>('')
+
+  // ── Class Teacher State ────────────────────────────────────────────────────
+  const [classTeacher, setClassTeacher] = useState<ClassTeacherState>({
+    allocationId: null,
+    currentTeacherId: null,
+    selectedTeacherId: '',
+    saving: false,
+    saved: false,
+    error: null,
+  })
 
   // ── Table Data ─────────────────────────────────────────────────────────────
   const [rows, setRows] = useState<RowState[]>([])
@@ -89,7 +109,36 @@ const MappingPage: FC = () => {
       .catch(console.error)
   }, [schoolId, classId])
 
-  // ── On filters complete: load subjects + allocations ──────────────────────
+  // ── Load class teacher for the selected section + session ──────────────────
+  const loadClassTeacher = useCallback(async () => {
+    if (!schoolId || !classSectionId || !sessionId) {
+      setClassTeacher({ allocationId: null, currentTeacherId: null, selectedTeacherId: '', saving: false, saved: false, error: null })
+      return
+    }
+    try {
+      const res = await getClassTeachersForSession(schoolId, sessionId)
+      const records: any[] = res.data?.data || []
+      const match = records.find((r: any) => String(r.class_section_id) === classSectionId)
+      if (match) {
+        setClassTeacher(prev => ({
+          ...prev,
+          allocationId: match.allocation_id,
+          currentTeacherId: match.teacher?.id ?? null,
+          selectedTeacherId: match.teacher?.id ? String(match.teacher.id) : '',
+          saved: false,
+          error: null,
+        }))
+      } else {
+        setClassTeacher({ allocationId: null, currentTeacherId: null, selectedTeacherId: '', saving: false, saved: false, error: null })
+      }
+    } catch {
+      // silently ignore
+    }
+  }, [schoolId, classSectionId, sessionId])
+
+  useEffect(() => { loadClassTeacher() }, [loadClassTeacher])
+
+  // ── On filters complete: load subjects + allocations ──────────────────
   const loadTable = useCallback(async () => {
     if (!schoolId || !classId || !classSectionId || !sessionId) { setRows([]); return }
     setLoadingTable(true)
@@ -104,7 +153,10 @@ const MappingPage: FC = () => {
       ])
 
       const subjects: ClassSubjectMappingModel[] = subRes.data?.data?.subjects || []
-      const allocations: TeacherAllocationModel[] = allocRes.data?.data || []
+      // Backend now returns only is_class_teacher=false records, guard client-side too
+      const allocations: TeacherAllocationModel[] = (allocRes.data?.data || []).filter(
+        (a: TeacherAllocationModel) => !a.is_class_teacher
+      )
 
       const newRows: RowState[] = subjects.map(sm => {
         const subj = sm.subject!
@@ -131,6 +183,34 @@ const MappingPage: FC = () => {
 
   useEffect(() => { loadTable() }, [loadTable])
 
+  // ── Assign / Update Class Teacher ──────────────────────────────────────────
+  const handleSaveClassTeacher = async () => {
+    if (!classTeacher.selectedTeacherId) return
+    const newTeacherId = Number(classTeacher.selectedTeacherId)
+    setClassTeacher(prev => ({ ...prev, saving: true, error: null }))
+    try {
+      await assignClassTeacherBySession(schoolId, {
+        teacher_id: newTeacherId,
+        class_section_id: Number(classSectionId),
+        academic_session_id: Number(sessionId),
+      })
+      setClassTeacher(prev => ({
+        ...prev,
+        saving: false,
+        saved: true,
+        currentTeacherId: newTeacherId,
+        error: null,
+      }))
+      setTimeout(() => setClassTeacher(prev => ({ ...prev, saved: false })), 2500)
+    } catch (e: any) {
+      setClassTeacher(prev => ({
+        ...prev,
+        saving: false,
+        error: e.response?.data?.message || 'Failed to assign class teacher.',
+      }))
+    }
+  }
+
   // ── Per-Row Teacher Change ─────────────────────────────────────────────────
   const handleTeacherChange = (subjectId: number, teacherId: string) => {
     setRows(prev => prev.map(r => r.subjectId === subjectId ? { ...r, selectedTeacherId: teacherId, saved: false, error: null } : r))
@@ -143,10 +223,8 @@ const MappingPage: FC = () => {
     setRows(prev => prev.map(r => r.subjectId === row.subjectId ? { ...r, saving: true, error: null } : r))
     try {
       if (row.allocationId) {
-        // ── PUT: update existing allocation ──
         await updateTeacherAllocation(schoolId, row.allocationId, newTeacherId)
       } else {
-        // ── POST: create new allocation ──
         await allocateTeacher(schoolId, {
           teacher_id: newTeacherId,
           class_section_id: Number(classSectionId),
@@ -192,16 +270,18 @@ const MappingPage: FC = () => {
   const isFiltersReady = sessionId && classId && classSectionId
 
   const allocatedCount = rows.filter(r => r.currentTeacherId).length
+  const currentClassTeacher = teachers.find(t => t.id === classTeacher.currentTeacherId)
+  const ctHasChange = classTeacher.selectedTeacherId &&
+    Number(classTeacher.selectedTeacherId) !== classTeacher.currentTeacherId
 
   return (
     <>
-
       <Content>
         {/* ── Page Header ── */}
         <div className='d-flex align-items-center justify-content-between mb-6'>
           <div>
             <h1 className='fw-bold text-gray-900 fs-2 mb-1'>Teacher Allocation</h1>
-            <span className='text-muted fs-6'>Assign teachers to subjects for each class section</span>
+            <span className='text-muted fs-6'>Assign class teachers and subject teachers per section &amp; session</span>
           </div>
           {isFiltersReady && rows.length > 0 && (
             <div className='d-flex align-items-center gap-3'>
@@ -300,6 +380,101 @@ const MappingPage: FC = () => {
           </div>
         </div>
 
+        {/* ── Class Teacher Mapping Table ── */}
+        {isFiltersReady && (
+          <div className='card card-flush shadow-sm mb-6'>
+            <div className='card-header border-0 pt-6 pb-0'>
+              <div className='d-flex align-items-center gap-3'>
+                <h3 className='card-title fw-semibold text-gray-700 fs-6 text-uppercase mb-0'>
+                  <i className='bi bi-person-badge text-primary me-2'></i>
+                  Class Teacher Mapping
+                </h3>
+              </div>
+            </div>
+            <div className='card-body pt-0'>
+              <div className='table-responsive'>
+                <table className='table table-row-dashed table-row-gray-200 align-middle gs-0 gy-4 mt-2'>
+                  <thead>
+                    <tr className='fw-bold text-muted text-uppercase fs-8 border-0'>
+                      <th>Session</th>
+                      <th>Class-Section</th>
+                      <th>Assigned Class Teacher</th>
+                      <th style={{ width: 240 }}>Assign / Change Teacher</th>
+                      <th className='text-end pe-0' style={{ width: 180 }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <span className='badge badge-light-primary fw-semibold'>{selectedSession?.session_year}</span>
+                      </td>
+                      <td>
+                        <span className='fw-bold text-gray-800 fs-6'>
+                          {selectedClass?.name} - {selectedSection?.section?.name}
+                        </span>
+                      </td>
+                      <td>
+                        {classTeacher.currentTeacherId ? (
+                          <div className='d-flex align-items-center gap-2'>
+                            <div className='symbol symbol-30px symbol-circle'>
+                              <span className='symbol-label bg-light-primary text-primary fw-bold fs-8'>
+                                {currentClassTeacher?.name?.[0]?.toUpperCase() || 'T'}
+                              </span>
+                            </div>
+                            <span className='fw-semibold text-gray-700 fs-7'>
+                              {currentClassTeacher?.name || `Teacher #${classTeacher.currentTeacherId}`}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className='text-muted fs-7 fst-italic'>Not assigned</span>
+                        )}
+                      </td>
+                      <td>
+                        <select
+                          className='form-select form-select-sm form-select-solid'
+                          value={classTeacher.selectedTeacherId}
+                          disabled={classTeacher.saving}
+                          onChange={e => setClassTeacher(prev => ({ ...prev, selectedTeacherId: e.target.value, saved: false, error: null }))}
+                        >
+                          <option value=''>— Select Teacher —</option>
+                          {teachers.map(t => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className='text-end pe-0'>
+                        <div className='d-flex justify-content-end align-items-center gap-2 flex-wrap'>
+                          {classTeacher.error && (
+                            <span className='text-danger fs-8 fw-semibold' title={classTeacher.error}>
+                              <i className='bi bi-exclamation-circle me-1'></i>Error
+                            </span>
+                          )}
+                          {classTeacher.saved && (
+                            <span className='text-success fs-7 fw-semibold'>
+                              <i className='bi bi-check-circle me-1'></i>Saved
+                            </span>
+                          )}
+                          <button
+                            className='btn btn-sm btn-primary px-4'
+                            disabled={!classTeacher.selectedTeacherId || !ctHasChange || classTeacher.saving}
+                            onClick={handleSaveClassTeacher}
+                            title='Assign Class Teacher'
+                          >
+                            {classTeacher.saving
+                              ? <span className='spinner-border spinner-border-sm' />
+                              : <><i className='bi bi-person-check me-1'></i>{classTeacher.currentTeacherId ? 'Update' : 'Assign'}</>
+                            }
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Global Message ── */}
         {globalMsg && (
           <div className={`alert alert-${globalMsg.type} d-flex align-items-center mb-6`}>
@@ -308,7 +483,7 @@ const MappingPage: FC = () => {
           </div>
         )}
 
-        {/* ── Table Card ── */}
+        {/* ── Subject-Teacher Table Card ── */}
         {isFiltersReady && (
           <div className='card card-flush shadow-sm'>
             <div className='card-header border-0 pt-6 pb-0'>
@@ -406,7 +581,6 @@ const MappingPage: FC = () => {
                             {/* Actions */}
                             <td className='text-end pe-0'>
                               <div className='d-flex justify-content-end align-items-center gap-2 flex-wrap'>
-                                {/* Status feedback */}
                                 {row.error && (
                                   <span className='text-danger fs-8 fw-semibold' title={row.error}>
                                     <i className='bi bi-exclamation-circle me-1'></i>Error

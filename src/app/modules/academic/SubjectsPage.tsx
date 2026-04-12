@@ -212,7 +212,7 @@ const SubjectsPage: FC = () => {
           const list = (r.data.data as any)?.sections || (r.data.data as any)?.mappings || []
           setCtSections(list)
         })
-        .catch(() => {})
+        .catch(() => { })
     } catch (e: any) { setCtError(e.response?.data?.message || 'Failed to assign') }
     finally { setAssigningCT(false) }
   }
@@ -229,7 +229,7 @@ const SubjectsPage: FC = () => {
   const tabItems: { id: PageTab; label: string; icon: string }[] = [
     { id: 'subjects', label: 'Subject Master', icon: 'ki-book' },
     { id: 'mapping', label: 'Class–Subject Mapping', icon: 'ki-abstract-26' },
-    { id: 'classteacher', label: 'Class Teacher Assignment', icon: 'ki-teacher' },
+
   ]
 
   return (

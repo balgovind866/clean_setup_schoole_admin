@@ -11,6 +11,8 @@ import {
   TeacherAllocationPayload,
   TeacherAllocationsListResponse,
   TeacherAllocationResponse,
+  ClassTeacherSessionPayload,
+  ClassTeacherSessionResponse,
 } from './_models'
 
 
@@ -224,4 +226,28 @@ export function deleteTeacherAllocation(
   allocationId: number
 ) {
   return axios.delete(`${TEACHER_ALLOCATIONS_URL(schoolId)}/${allocationId}`)
+}
+
+// ─── Session-aware Class Teacher API ──────────────────────────────────────────────
+
+/** POST /school/:id/teacher-allocations/class-teacher */
+export function assignClassTeacherBySession(
+  schoolId: string | number,
+  payload: ClassTeacherSessionPayload
+) {
+  return axios.post<ClassTeacherSessionResponse>(
+    `${TEACHER_ALLOCATIONS_URL(schoolId)}/class-teacher`,
+    payload
+  )
+}
+
+/** GET /school/:id/teacher-allocations/class-teachers?session_id=X */
+export function getClassTeachersForSession(
+  schoolId: string | number,
+  sessionId: string | number
+) {
+  return axios.get<{ success: boolean; count: number; data: any[] }>(
+    `${TEACHER_ALLOCATIONS_URL(schoolId)}/class-teachers`,
+    { params: { session_id: sessionId } }
+  )
 }
