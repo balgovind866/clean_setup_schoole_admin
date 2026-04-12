@@ -36,7 +36,27 @@ const AdmissionPage: FC = () => {
   const [students, setStudents] = useState<StudentModel[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [listError, setListError] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'standard' | 'excel'>('standard')
+
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(10)
+  const [paginationMeta, setPaginationMeta] = useState({
+    total: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPrevPage: false
+  })
+
+  // Handle search debounce
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1) // Reset to first page on search
+    }, 500)
+    return () => clearTimeout(handler)
+  }, [search])
 
   // ─── Admit Modal State ───
   const [showAdmitModal, setShowAdmitModal] = useState(false)
@@ -74,12 +94,17 @@ const AdmissionPage: FC = () => {
     if (!schoolId) return
     setLoading(true); setListError(null)
     try {
-      const { data } = await getStudents(schoolId, { limit: 100 })
-      if (data.success) setStudents(data.data.students || [])
+      const { data } = await getStudents(schoolId, { page, limit, search: debouncedSearch })
+      if (data.success) {
+        setStudents(data.data.students || [])
+        if (data.pagination) {
+          setPaginationMeta(data.pagination)
+        }
+      }
     } catch (err: any) {
       setListError(err.response?.data?.message || 'Failed to load students')
     } finally { setLoading(false) }
-  }, [schoolId])
+  }, [schoolId, page, limit, debouncedSearch])
 
   useEffect(() => { fetchStudents() }, [fetchStudents])
 
@@ -228,13 +253,10 @@ const AdmissionPage: FC = () => {
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
-  const filtered = students.filter(s =>
-    `${s.first_name} ${s.last_name} ${s.email} ${s.mobile_number}`
-      .toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = students // Filtering is now handled by the backend
 
   const stats = {
-    total: students.length,
+    total: paginationMeta.total,
     active: students.filter(s => s.is_active).length,
     enrolled: students.filter(s => s.enrollments && s.enrollments.length > 0).length,
   }
@@ -286,6 +308,14 @@ const AdmissionPage: FC = () => {
                   onChange={e => setSearch(e.target.value)}
                 />
               </div>
+              <div className='btn-group' role='group'>
+                  <button className={`btn btn-sm btn-icon ${viewMode === 'standard' ? 'btn-primary' : 'btn-light-primary'}`} onClick={() => setViewMode('standard')} title="Standard View">
+                      <i className='ki-duotone ki-element-11 fs-3'><span className='path1'></span><span className='path2'></span><span className='path3'></span><span className='path4'></span></i>
+                  </button>
+                  <button className={`btn btn-sm btn-icon ${viewMode === 'excel' ? 'btn-primary' : 'btn-light-primary'}`} onClick={() => setViewMode('excel')} title="Excel View">
+                      <i className='ki-duotone ki-row-horizontal fs-3'><span className='path1'></span><span className='path2'></span></i>
+                  </button>
+              </div>
               <button className='btn btn-primary btn-sm' onClick={() => setShowAdmitModal(true)}>
                 <i className='ki-duotone ki-plus fs-3'></i> Admit Student
               </button>
@@ -294,104 +324,215 @@ const AdmissionPage: FC = () => {
 
           <div className='card-body pt-0'>
             <div className='table-responsive'>
-              <table className='table align-middle table-row-dashed fs-7 gy-4'>
-                <thead>
-                  <tr className='text-start text-muted fw-bold fs-7 text-uppercase gs-0 border-bottom border-gray-100'>
-                    <th className='w-30px'>#</th>
-                    <th className='min-w-180px'>Student</th>
-                    <th>Mobile</th>
-                    <th className='text-center'>Profile</th>
-                    <th className='text-center'>Parent</th>
-                    <th className='text-center'>Address</th>
-                    <th className='text-center'>Docs</th>
-                    <th className='text-center'>Enrolled</th>
-                    <th>Status</th>
-                    <th className='text-end min-w-80px'>Actions</th>
-                  </tr>
-                </thead>
-                <tbody className='text-gray-600 fw-semibold'>
-                  {loading ? (
-                    <tr><td colSpan={10} className='text-center py-10'>
-                      <span className='spinner-border spinner-border-sm text-primary me-2'></span>
-                      <span className='text-muted'>Loading students...</span>
-                    </td></tr>
-                  ) : filtered.length === 0 ? (
-                    <tr><td colSpan={10} className='text-center py-12'>
-                      <div className='d-flex flex-column align-items-center'>
-                        <i className='ki-duotone ki-people fs-3x text-gray-300 mb-3'><span className='path1'></span><span className='path2'></span><span className='path3'></span><span className='path4'></span><span className='path5'></span></i>
-                        <div className='text-muted fs-6'>No students found.</div>
-                        <button className='btn btn-sm btn-light-primary mt-3' onClick={() => setShowAdmitModal(true)}>Admit First Student</button>
-                      </div>
-                    </td></tr>
-                  ) : filtered.map((s, idx) => {
-                    const hasProfile = s.profile && (Array.isArray(s.profile) ? s.profile.length > 0 : Object.keys(s.profile).length > 0)
-                    const hasParent = s.parent && (Array.isArray(s.parent) ? s.parent.length > 0 : Object.keys(s.parent).length > 0)
-                    const addrObj = s.address || (s as any).addresses
-                    const hasAddress = Array.isArray(addrObj) ? addrObj.length > 0 : !!addrObj && Object.keys(addrObj).length > 0
-                    const docsObj = s.documents || (s as any).document
-                    const docsArray = Array.isArray(docsObj) ? docsObj : (docsObj ? [docsObj] : [])
-                    const docsCount = docsArray.length
-                    const enrollObj = s.enrollments || (s as any).enrollment
-                    const hasEnrollment = Array.isArray(enrollObj) ? enrollObj.length > 0 : !!enrollObj && Object.keys(enrollObj).length > 0
+              {viewMode === 'standard' ? (
+                <table className='table align-middle table-row-dashed fs-7 gy-4'>
+                  <thead>
+                    <tr className='text-start text-muted fw-bold fs-7 text-uppercase gs-0 border-bottom border-gray-100'>
+                      <th className='w-30px'>#</th>
+                      <th className='min-w-180px'>Student</th>
+                      <th>Mobile</th>
+                      <th className='text-center'>Profile</th>
+                      <th className='text-center'>Parent</th>
+                      <th className='text-center'>Address</th>
+                      <th className='text-center'>Docs</th>
+                      <th className='text-center'>Enrolled</th>
+                      <th>Status</th>
+                      <th className='text-end min-w-80px'>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className='text-gray-600 fw-semibold'>
+                    {loading ? (
+                      <tr><td colSpan={10} className='text-center py-10'>
+                        <span className='spinner-border spinner-border-sm text-primary me-2'></span>
+                        <span className='text-muted'>Loading students...</span>
+                      </td></tr>
+                    ) : filtered.length === 0 ? (
+                      <tr><td colSpan={10} className='text-center py-12'>
+                        <div className='d-flex flex-column align-items-center'>
+                          <i className='ki-duotone ki-people fs-3x text-gray-300 mb-3'><span className='path1'></span><span className='path2'></span><span className='path3'></span><span className='path4'></span><span className='path5'></span></i>
+                          <div className='text-muted fs-6'>No students found.</div>
+                          <button className='btn btn-sm btn-light-primary mt-3' onClick={() => setShowAdmitModal(true)}>Admit First Student</button>
+                        </div>
+                      </td></tr>
+                    ) : filtered.map((s, idx) => {
+                      const hasProfile = s.profile && (Array.isArray(s.profile) ? s.profile.length > 0 : Object.keys(s.profile).length > 0)
+                      const hasParent = s.parent && (Array.isArray(s.parent) ? s.parent.length > 0 : Object.keys(s.parent).length > 0)
+                      const addrObj = s.address || (s as any).addresses
+                      const hasAddress = Array.isArray(addrObj) ? addrObj.length > 0 : !!addrObj && Object.keys(addrObj).length > 0
+                      const docsObj = s.documents || (s as any).document
+                      const docsArray = Array.isArray(docsObj) ? docsObj : (docsObj ? [docsObj] : [])
+                      const docsCount = docsArray.length
+                      const enrollObj = s.enrollments || (s as any).enrollment
+                      const hasEnrollment = Array.isArray(enrollObj) ? enrollObj.length > 0 : !!enrollObj && Object.keys(enrollObj).length > 0
 
-                    return (
-                      <tr key={s.id}>
-                        <td className='text-gray-400 fs-8'>{idx + 1}</td>
-                        <td>
-                          <div className='d-flex align-items-center'>
-                            <div className='symbol symbol-35px me-3'>
-                              <div className='symbol-label fs-5 fw-bold text-white bg-primary'>
-                                {s.first_name.charAt(0).toUpperCase()}
+                      return (
+                        <tr key={s.id}>
+                          <td className='text-gray-400 fs-8'>{idx + 1}</td>
+                          <td>
+                            <div className='d-flex align-items-center'>
+                              <div className='symbol symbol-35px me-3'>
+                                <div className='symbol-label fs-5 fw-bold text-white bg-primary'>
+                                  {s.first_name.charAt(0).toUpperCase()}
+                                </div>
+                              </div>
+                              <div>
+                                <div className='text-gray-800 fw-bold fs-6'>{s.first_name} {s.last_name}</div>
+                                <div className='text-muted fs-8'>{s.email}</div>
                               </div>
                             </div>
-                            <div>
-                              <div className='text-gray-800 fw-bold fs-6'>{s.first_name} {s.last_name}</div>
-                              <div className='text-muted fs-8'>{s.email}</div>
+                          </td>
+                          <td>
+                            <span className='text-gray-700 fs-7'>{s.mobile_number || '—'}</span>
+                          </td>
+                          <td className='text-center'><CheckIcon exists={!!hasProfile} /></td>
+                          <td className='text-center'><CheckIcon exists={!!hasParent} /></td>
+                          <td className='text-center'><CheckIcon exists={!!hasAddress} /></td>
+                          <td className='text-center'>
+                            {docsCount > 0
+                              ? <span className='badge badge-light-primary'>{docsCount}</span>
+                              : <CheckIcon exists={false} />}
+                          </td>
+                          <td className='text-center'>
+                            {hasEnrollment
+                              ? <span className='badge badge-light-primary'>Yes</span>
+                              : <span className='badge badge-light fs-8 text-gray-400'>No</span>}
+                          </td>
+                          <td>
+                            <div className='form-check form-switch form-check-custom form-check-solid form-check-sm'>
+                              <input
+                                className='form-check-input'
+                                type='checkbox'
+                                checked={s.is_active}
+                                onChange={() => handleToggleStatus(s)}
+                              />
+                              <span className={`fs-8 fw-semibold ms-2 ${s.is_active ? 'text-primary' : 'text-gray-400'}`}>
+                                {s.is_active ? 'Active' : 'Off'}
+                              </span>
                             </div>
-                          </div>
-                        </td>
-                        <td>
-                          <span className='text-gray-700 fs-7'>{s.mobile_number || '—'}</span>
-                        </td>
-                        <td className='text-center'><CheckIcon exists={!!hasProfile} /></td>
-                        <td className='text-center'><CheckIcon exists={!!hasParent} /></td>
-                        <td className='text-center'><CheckIcon exists={!!hasAddress} /></td>
-                        <td className='text-center'>
-                          {docsCount > 0
-                            ? <span className='badge badge-light-primary'>{docsCount}</span>
-                            : <CheckIcon exists={false} />}
-                        </td>
-                        <td className='text-center'>
-                          {hasEnrollment
-                            ? <span className='badge badge-light-primary'>Yes</span>
-                            : <span className='badge badge-light fs-8 text-gray-400'>No</span>}
-                        </td>
-                        <td>
-                          <div className='form-check form-switch form-check-custom form-check-solid form-check-sm'>
-                            <input
-                              className='form-check-input'
-                              type='checkbox'
-                              checked={s.is_active}
-                              onChange={() => handleToggleStatus(s)}
-                            />
-                            <span className={`fs-8 fw-semibold ms-2 ${s.is_active ? 'text-primary' : 'text-gray-400'}`}>
-                              {s.is_active ? 'Active' : 'Off'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className='text-end'>
-                          <button
-                            className='btn btn-sm btn-light-primary fw-semibold'
-                            onClick={() => openManageModal(s)}
-                          >
-                            Manage
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td className='text-end'>
+                            <button
+                              className='btn btn-sm btn-light-primary fw-semibold'
+                              onClick={() => openManageModal(s)}
+                            >
+                              Manage
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <table className='table table-bordered table-striped align-middle fs-8 gy-3 text-nowrap'>
+                  <thead className='bg-light'>
+                    <tr className='text-start text-muted fw-bolder fs-8 text-uppercase gs-0'>
+                      <th>ID</th>
+                      <th>Roll No</th>
+                      <th>Class / Sec</th>
+                      <th>First Name</th>
+                      <th>Last Name</th>
+                      <th>Gender</th>
+                      <th>DOB</th>
+                      <th>Blood Grp</th>
+                      <th>Mobile</th>
+                      <th>Email</th>
+                      <th>Father Name</th>
+                      <th>Father Phone</th>
+                      <th>Mother Name</th>
+                      <th>State / City</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className='text-gray-600 fw-semibold'>
+                    {loading ? (
+                        <tr><td colSpan={15} className='text-center py-10'><span className='spinner-border spinner-border-sm text-primary me-2'></span></td></tr>
+                    ) : filtered.length === 0 ? (
+                        <tr><td colSpan={15} className='text-center py-5'>No data</td></tr>
+                    ) : filtered.map(s => {
+                        const profile = s.profile || {} as any;
+                        const parent = s.parent || {} as any;
+                        const addressObj = s.address || (s as any).addresses;
+                        const address = (Array.isArray(addressObj) ? addressObj[0] : addressObj) || {} as any;
+                        const enrollObj = s.enrollments || (s as any).enrollment;
+                        const enrollArray = Array.isArray(enrollObj) ? enrollObj : (enrollObj ? [enrollObj] : []);
+                        const enroll = enrollArray.length > 0 ? enrollArray[0] : null;
+
+                        return (
+                          <tr key={s.id}>
+                             <td>{s.id}</td>
+                             <td className='text-dark fw-bold'>{enroll?.roll_number || '—'}</td>
+                             <td>
+                                 {enroll?.class_section?.class?.name 
+                                    ? <span className='badge badge-light-info'>{enroll.class_section.class.name} / {enroll.class_section.section?.name || '-'}</span> 
+                                    : '—'}
+                             </td>
+                             <td className='text-dark fw-bold'>{s.first_name}</td>
+                             <td className='text-dark fw-bold'>{s.last_name}</td>
+                             <td className="text-capitalize">{profile.gender || '—'}</td>
+                             <td>{profile.dob ? profile.dob.split('T')[0] : '—'}</td>
+                             <td>{profile.blood_group || '—'}</td>
+                             <td>{s.mobile_number || '—'}</td>
+                             <td>{s.email}</td>
+                             <td>{parent.father_name || '—'}</td>
+                             <td>{parent.father_phone || '—'}</td>
+                             <td>{parent.mother_name || '—'}</td>
+                             <td>{address.current_state ? `${address.current_state} / ${address.current_city || '?'}` : '—'}</td>
+                             <td>
+                                <span className={`badge badge-light-${s.is_active ? 'success' : 'danger'}`}>
+                                   {s.is_active ? 'Active' : 'Off'}
+                                </span>
+                             </td>
+                          </tr>
+                        )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Pagination */}
+            <div className='row mt-5'>
+                <div className='col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'>
+                    <div className='dataTables_length'>
+                        <label>
+                            <select
+                                className='form-select form-select-sm form-select-solid'
+                                value={limit}
+                                onChange={(e) => {
+                                    setLimit(Number(e.target.value))
+                                    setPage(1)
+                                }}
+                            >
+                                <option value={10}>10</option>
+                                <option value={25}>25</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+                <div className='col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'>
+                    <div className='dataTables_paginate paging_simple_numbers'>
+                        <ul className='pagination'>
+                            <li className={`paginate_button page-item previous ${!paginationMeta.hasPrevPage ? 'disabled' : ''}`}>
+                                <button className='page-link' onClick={() => setPage(page - 1)} disabled={!paginationMeta.hasPrevPage}>
+                                    <i className='previous'></i>
+                                </button>
+                            </li>
+                            {[...Array(paginationMeta.totalPages || 0)].map((_, i) => (
+                                <li key={i} className={`paginate_button page-item ${page === i + 1 ? 'active' : ''}`}>
+                                    <button className='page-link' onClick={() => setPage(i + 1)}>{i + 1}</button>
+                                </li>
+                            ))}
+                            <li className={`paginate_button page-item next ${!paginationMeta.hasNextPage ? 'disabled' : ''}`}>
+                                <button className='page-link' onClick={() => setPage(page + 1)} disabled={!paginationMeta.hasNextPage}>
+                                    <i className='next'></i>
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
             </div>
           </div>
         </div>
