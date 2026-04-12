@@ -11,7 +11,7 @@ export function getMyAssignments(
 }
 
 export function getAssignmentDetails(schoolId: string | number, assignmentId: string | number) {
-  return axios.get<{ success: boolean; data: { assignment: AssignmentModel; submissions: AssignmentSubmissionModel[] } }>(`${API_URL}/school/${schoolId}/teacher-app/assignments/${assignmentId}`)
+  return axios.get<{ success: boolean; data: { assignment: AssignmentModel & { submissions: AssignmentSubmissionModel[] } } }>(`${API_URL}/school/${schoolId}/teacher-app/assignments/${assignmentId}`)
 }
 
 export function createAssignment(schoolId: string | number, data: FormData) {

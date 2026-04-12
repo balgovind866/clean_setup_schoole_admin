@@ -16,6 +16,7 @@ export const academicRoutes = {
     calendar: lazyLoad(() => import('../modules/academic/CalendarPage'), 'CalendarWrapper'),
     syllabus: lazyLoad(() => import('../modules/academic/SyllabusPage'), 'SyllabusWrapper'),
     lessons: lazyLoad(() => import('../modules/academic/LessonsPage'), 'LessonsWrapper'),
+    assignments: lazyLoad(() => import('../modules/academic/assignments/AssignmentsPage'), 'AcademicAssignmentsPageWrapper'),
     examSchedule: lazyLoad(() => import('../modules/academic/ExamSchedulePage'), 'ExamScheduleWrapper'),
 }
 

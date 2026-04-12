@@ -91,6 +91,7 @@ const SidebarMenuMain = () => {
               <SidebarMenuItem to='/academic/calendar' title='Calendar' hasBullet={true} />
               <SidebarMenuItem to='/academic/syllabus' title='Syllabus' hasBullet={true} />
               <SidebarMenuItem to='/academic/lessons' title='Lesson Plans' hasBullet={true} />
+              <SidebarMenuItem to='/academic/assignments' title='Assignments' hasBullet={true} />
               <SidebarMenuItem to='/academic/exam-schedule' title='Exam Schedule' hasBullet={true} />
             </SidebarMenuItemWithSub>
           )}
