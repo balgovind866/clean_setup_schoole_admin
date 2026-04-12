@@ -40,8 +40,8 @@ export function getSchools(page: number, limit: number, search: string = '', isA
   })
 }
 
-export function updateSchool(id: string | number, schoolData: Partial<SchoolCreationData>) {
-  return axios.put<SchoolResponse>(SCHOOL_URL(id), schoolData)
+export function updateSchool(id: string | number, schoolData: Partial<SchoolCreationData> | FormData) {
+  return axios.put<SchoolResponse>(SCHOOL_URL(id), schoolData);
 }
 
 export function toggleSchoolStatus(id: string | number) {

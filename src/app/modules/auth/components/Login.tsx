@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import * as Yup from 'yup'
 import clsx from 'clsx'
 import { useFormik } from 'formik'
@@ -36,7 +36,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const { saveAuth, setCurrentUser } = useAuth()
 
-  const loadSchoolOptions = async (inputValue: string) => {
+  const loadSchoolOptions = useCallback(async (inputValue: string) => {
     try {
       const response = await getSchools(1, 10, inputValue, true)
       if (response?.data?.data?.schools) {
@@ -50,7 +50,7 @@ export function Login() {
       console.error('Error fetching schools', error)
       return []
     }
-  }
+  }, [])
 
   const formik = useFormik({
     initialValues,

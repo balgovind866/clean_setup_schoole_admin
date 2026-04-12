@@ -48,7 +48,20 @@ const AdministrationPage: FC = () => {
     };
 
     // New School State
-    const [newSchool, setNewSchool] = useState({
+    const [newSchool, setNewSchool] = useState<{
+        name: string;
+        code: string;
+        subdomain: string;
+        db_host?: string;
+        db_port?: number;
+        db_username?: string;
+        db_password?: string;
+        address?: string;
+        phone?: string;
+        email?: string;
+        logoPath?: string;
+        logoFile?: File | null;
+    }>({
         name: "",
         code: "",
         subdomain: "",
@@ -59,7 +72,8 @@ const AdministrationPage: FC = () => {
         address: "",
         phone: "",
         email: "",
-        logoPath: ""
+        logoPath: "",
+        logoFile: null
     });
 
     // Filtered is now handled by API
@@ -71,7 +85,7 @@ const AdministrationPage: FC = () => {
         setEditSchoolId(null);
         setNewSchool({
             name: "", code: "", subdomain: "", db_host: "localhost", db_port: 5432,
-            db_username: "postgres", db_password: "", address: "", phone: "", email: "", logoPath: ""
+            db_username: "postgres", db_password: "", address: "", phone: "", email: "", logoPath: "", logoFile: null
         });
         setError(null);
         setShowModal(true);
@@ -90,7 +104,8 @@ const AdministrationPage: FC = () => {
             address: school.address || "",
             phone: school.phone || "",
             email: school.email || "",
-            logoPath: school.logoPath || ""
+            logoPath: school.logoPath || "",
+            logoFile: null
         });
         setError(null);
         setShowModal(true);
@@ -101,13 +116,17 @@ const AdministrationPage: FC = () => {
         setError(null);
         try {
             if (editSchoolId) {
-                // Use limited payload for updates as per backend constraints
-                const updatePayload = {
-                    name: newSchool.name,
-                    logoPath: newSchool.logoPath || "https://example.com/images/default-logo.png"
-                };
+                // Use FormData wrapper for updates
+                const updatePayload = new FormData();
+                updatePayload.append("name", newSchool.name);
                 
-                const { data: response } = await updateSchool(editSchoolId, updatePayload);
+                if (newSchool.logoFile) {
+                    updatePayload.append("logo", newSchool.logoFile);
+                } else if (newSchool.logoPath) {
+                    updatePayload.append("logoPath", newSchool.logoPath);
+                }
+                
+                const { data: response } = await updateSchool(editSchoolId, updatePayload as any);
                 if (response.success) {
                     setSchools(schools.map(s => s.id === editSchoolId ? { ...s, ...response.data.school } : s));
                     setShowModal(false);
@@ -353,9 +372,42 @@ const AdministrationPage: FC = () => {
                         {editSchoolId && (
                             <div className='d-flex flex-column mb-8 fv-row'>
                                 <label className='d-flex align-items-center fs-6 fw-semibold mb-2'>
-                                    <span>Logo URL</span>
+                                    <span>School Logo</span>
                                 </label>
-                                <input type='text' className='form-control form-control-solid' placeholder='https://example.com/logo.png' value={newSchool.logoPath} onChange={(e) => setNewSchool({ ...newSchool, logoPath: e.target.value })} />
+                                <div>
+                                    {/* Image input */}
+                                    <div
+                                        className='image-input image-input-outline image-input-empty'
+                                        style={{ backgroundImage: `url('/media/svg/avatars/blank.svg')` }}
+                                    >
+                                        <div 
+                                            className='image-input-wrapper w-125px h-125px' 
+                                            style={{ backgroundImage: `url(${newSchool.logoPath || '/media/svg/avatars/blank.svg'})` }}
+                                        ></div>
+                                        <label
+                                            className='btn btn-icon btn-circle btn-active-color-primary w-25px h-25px bg-body shadow'
+                                            data-kt-image-input-action='change'
+                                            data-bs-toggle='tooltip'
+                                            title='Change logo'
+                                        >
+                                            <i className='bi bi-pencil-fill fs-7'></i>
+                                            <input 
+                                                type='file' 
+                                                name='logo' 
+                                                accept='.png, .jpg, .jpeg' 
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) {
+                                                        const objectUrl = URL.createObjectURL(file);
+                                                        setNewSchool(prev => ({ ...prev, logoFile: file, logoPath: objectUrl }));
+                                                    }
+                                                }} 
+                                            />
+                                            <input type='hidden' name='logo_remove' />
+                                        </label>
+                                    </div>
+                                    <div className='form-text'>Allowed file types: png, jpg, jpeg.</div>
+                                </div>
                             </div>
                         )}
 
