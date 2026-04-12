@@ -7,6 +7,15 @@ import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import { KTIcon } from '../../../_metronic/helpers'
 
+// ─── Predefined Color Themes ────────────────────────────────────────────────
+const COLOR_THEMES = [
+    { name: 'Nature Green', primary: '#4c662b', secondary: '#586249' },
+    { name: 'Ocean Teal', primary: '#006876', secondary: '#4a6268' },
+    { name: 'Royal Blue', primary: '#1a56db', secondary: '#505863ff' },
+    { name: 'Sunset Orange', primary: '#c4441c', secondary: '#8b5c4a' },
+    { name: 'Deep Purple', primary: '#6b21a8', secondary: '#6d5a7b' },
+]
+
 const AppManagementPage: React.FC = () => {
     const { currentUser } = useAuth()
     const tenantId = currentUser?.schoolId || '30'
@@ -16,8 +25,8 @@ const AppManagementPage: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false)
 
     const [formData, setFormData] = useState<UpdateAppSettingsPayload>({
-        primary_color: '#3498db',
-        secondary_color: '#2980b9',
+        primary_color: '#4c662b',
+        secondary_color: '#586249',
         enabled_modules: {
             exams: true,
             fees: true,
@@ -35,8 +44,8 @@ const AppManagementPage: React.FC = () => {
             if (response.data?.success && response.data?.data) {
                 const fetchedData = response.data.data
                 setFormData({
-                    primary_color: fetchedData.primary_color || '#3498db',
-                    secondary_color: fetchedData.secondary_color || '#2980b9',
+                    primary_color: fetchedData.primary_color || '#4c662b',
+                    secondary_color: fetchedData.secondary_color || '#586249',
                     enabled_modules: {
                         exams: fetchedData.enabled_modules?.exams ?? true,
                         fees: fetchedData.enabled_modules?.fees ?? true,
@@ -62,11 +71,11 @@ const AppManagementPage: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tenantId])
 
-    const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target
+    const handleSelectTheme = (primary: string, secondary: string) => {
         setFormData(prev => ({
             ...prev,
-            [name]: value
+            primary_color: primary,
+            secondary_color: secondary,
         }))
     }
 
@@ -96,6 +105,10 @@ const AppManagementPage: React.FC = () => {
             setIsSaving(false)
         }
     }
+
+    const isThemeSelected = (primary: string, secondary: string) =>
+        formData.primary_color?.toLowerCase() === primary.toLowerCase() &&
+        formData.secondary_color?.toLowerCase() === secondary.toLowerCase()
 
     return (
         <>
@@ -135,52 +148,99 @@ const AppManagementPage: React.FC = () => {
                         {/* Tab 1: Branding & Theme */}
                         <div className={clsx('tab-pane fade', { 'show active': activeTab === 'branding' })}>
                             <div className='row mb-8'>
-                                <div className='col-xl-6'>
-                                    <h4 className='fw-semibold text-gray-800 mb-5'>Colors</h4>
+                                <div className='col-xl-8'>
+                                    <h4 className='fw-semibold text-gray-800 mb-2'>Choose App Theme</h4>
+                                    <p className='text-muted fs-7 mb-6'>Select a color theme for your app. The selected colors will be used for buttons, headers, and accents.</p>
 
-                                    <div className='row mb-6'>
-                                        <label className='col-lg-4 col-form-label required fw-bold fs-6'>Primary Color</label>
-                                        <div className='col-lg-8'>
-                                            <div className='d-flex align-items-center'>
-                                                <input
-                                                    type='color'
-                                                    name='primary_color'
-                                                    className='form-control form-control-color me-3'
-                                                    value={formData.primary_color}
-                                                    onChange={handleColorChange}
-                                                    title='Choose your primary color'
-                                                />
-                                                <input
-                                                    type='text'
-                                                    className='form-control form-control-solid flex-grow-1'
-                                                    value={formData.primary_color}
-                                                    readOnly
-                                                />
-                                            </div>
-                                            <div className='form-text'>Used for primary buttons, active states, and main accents.</div>
-                                        </div>
+                                    <div className='row g-4 mb-6'>
+                                        {COLOR_THEMES.map((theme) => {
+                                            const selected = isThemeSelected(theme.primary, theme.secondary)
+                                            return (
+                                                <div key={theme.name} className='col-lg-4 col-md-6'>
+                                                    <div
+                                                        className='cursor-pointer rounded-3 p-4 position-relative'
+                                                        onClick={() => handleSelectTheme(theme.primary, theme.secondary)}
+                                                        style={{
+                                                            border: selected ? `2.5px solid ${theme.primary}` : '2px solid #e4e6ef',
+                                                            background: selected ? `${theme.primary}08` : '#fff',
+                                                            transition: 'all 0.2s ease',
+                                                            boxShadow: selected ? `0 4px 16px ${theme.primary}22` : 'none',
+                                                        }}
+                                                    >
+                                                        {/* Selected checkmark */}
+                                                        {selected && (
+                                                            <div
+                                                                className='position-absolute d-flex align-items-center justify-content-center'
+                                                                style={{
+                                                                    top: -8, right: -8,
+                                                                    width: 26, height: 26,
+                                                                    borderRadius: '50%',
+                                                                    background: theme.primary,
+                                                                    color: '#fff',
+                                                                    fontSize: 14,
+                                                                    boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                                                                }}
+                                                            >
+                                                                <i className='bi bi-check-lg' />
+                                                            </div>
+                                                        )}
+
+                                                        {/* Color swatches */}
+                                                        <div className='d-flex align-items-center gap-3 mb-3'>
+                                                            <div
+                                                                style={{
+                                                                    width: 40, height: 40,
+                                                                    borderRadius: '50%',
+                                                                    background: theme.primary,
+                                                                    border: '3px solid #fff',
+                                                                    boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                                                                }}
+                                                                title={`Primary: ${theme.primary}`}
+                                                            />
+                                                            <div
+                                                                style={{
+                                                                    width: 32, height: 32,
+                                                                    borderRadius: '50%',
+                                                                    background: theme.secondary,
+                                                                    border: '3px solid #fff',
+                                                                    boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+                                                                    marginLeft: -12,
+                                                                }}
+                                                                title={`Secondary: ${theme.secondary}`}
+                                                            />
+                                                        </div>
+
+                                                        {/* Theme name */}
+                                                        <div className='fw-bold text-gray-800 fs-6 mb-1'>{theme.name}</div>
+                                                        <div className='d-flex align-items-center gap-2'>
+                                                            <span className='fs-8 text-muted fw-semibold' style={{ fontFamily: 'monospace' }}>{theme.primary}</span>
+                                                            <span className='text-muted fs-8'>·</span>
+                                                            <span className='fs-8 text-muted fw-semibold' style={{ fontFamily: 'monospace' }}>{theme.secondary}</span>
+                                                        </div>
+
+                                                        {/* Preview bar */}
+                                                        <div className='mt-3 d-flex gap-1 rounded overflow-hidden' style={{ height: 6 }}>
+                                                            <div style={{ flex: 3, background: theme.primary }} />
+                                                            <div style={{ flex: 2, background: theme.secondary }} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
                                     </div>
 
-                                    <div className='row mb-6'>
-                                        <label className='col-lg-4 col-form-label required fw-bold fs-6'>Secondary Color</label>
-                                        <div className='col-lg-8'>
-                                            <div className='d-flex align-items-center'>
-                                                <input
-                                                    type='color'
-                                                    name='secondary_color'
-                                                    className='form-control form-control-color me-3'
-                                                    value={formData.secondary_color}
-                                                    onChange={handleColorChange}
-                                                    title='Choose your secondary color'
-                                                />
-                                                <input
-                                                    type='text'
-                                                    className='form-control form-control-solid flex-grow-1'
-                                                    value={formData.secondary_color}
-                                                    readOnly
-                                                />
-                                            </div>
-                                            <div className='form-text'>Used for secondary elements, badges, and headers.</div>
+                                    {/* Currently selected display */}
+                                    <div className='border border-dashed border-gray-300 rounded-3 p-4 d-flex align-items-center gap-4'>
+                                        <span className='fw-semibold text-gray-600 fs-7'>Currently Selected:</span>
+                                        <div className='d-flex align-items-center gap-2'>
+                                            <div style={{ width: 22, height: 22, borderRadius: '50%', background: formData.primary_color, border: '2px solid #fff', boxShadow: '0 1px 4px rgba(0,0,0,0.15)' }} />
+                                            <span className='fw-bold text-gray-800 fs-7'>Primary</span>
+                                            <span className='text-muted fs-8' style={{ fontFamily: 'monospace' }}>{formData.primary_color}</span>
+                                        </div>
+                                        <div className='d-flex align-items-center gap-2'>
+                                            <div style={{ width: 22, height: 22, borderRadius: '50%', background: formData.secondary_color, border: '2px solid #fff', boxShadow: '0 1px 4px rgba(0,0,0,0.15)' }} />
+                                            <span className='fw-bold text-gray-800 fs-7'>Secondary</span>
+                                            <span className='text-muted fs-8' style={{ fontFamily: 'monospace' }}>{formData.secondary_color}</span>
                                         </div>
                                     </div>
                                 </div>

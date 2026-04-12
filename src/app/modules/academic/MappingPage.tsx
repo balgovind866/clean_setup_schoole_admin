@@ -12,7 +12,6 @@ import {
   updateTeacherAllocation,
   deleteTeacherAllocation,
   assignClassTeacherBySession,
-  getClassTeachersForSession,
 } from './core/_requests'
 import { getTeachers } from '../teachers/core/_requests'
 import {
@@ -116,15 +115,19 @@ const MappingPage: FC = () => {
       return
     }
     try {
-      const res = await getClassTeachersForSession(schoolId, sessionId)
-      const records: any[] = res.data?.data || []
-      const match = records.find((r: any) => String(r.class_section_id) === classSectionId)
-      if (match) {
+      const allocRes = await getTeacherAllocations(schoolId, {
+        class_section_id: Number(classSectionId),
+        academic_session_id: Number(sessionId),
+      })
+      const allocs: any[] = allocRes.data?.data || []
+      const ctAlloc = allocs.find((a: any) => a.is_class_teacher === true)
+      if (ctAlloc) {
+        const teacherId = ctAlloc.teacher?.id ?? ctAlloc.teacher_id ?? null
         setClassTeacher(prev => ({
           ...prev,
-          allocationId: match.allocation_id,
-          currentTeacherId: match.teacher?.id ?? null,
-          selectedTeacherId: match.teacher?.id ? String(match.teacher.id) : '',
+          allocationId: ctAlloc.id,
+          currentTeacherId: teacherId,
+          selectedTeacherId: teacherId ? String(teacherId) : '',
           saved: false,
           error: null,
         }))
@@ -153,21 +156,23 @@ const MappingPage: FC = () => {
       ])
 
       const subjects: ClassSubjectMappingModel[] = subRes.data?.data?.subjects || []
-      // Backend now returns only is_class_teacher=false records, guard client-side too
-      const allocations: TeacherAllocationModel[] = (allocRes.data?.data || []).filter(
-        (a: TeacherAllocationModel) => !a.is_class_teacher
+      // Filter out class teacher records (is_class_teacher=true, subject=null)
+      const allocations: any[] = (allocRes.data?.data || []).filter(
+        (a: any) => !a.is_class_teacher
       )
 
       const newRows: RowState[] = subjects.map(sm => {
         const subj = sm.subject!
-        const alloc = allocations.find(a => a.subject_id === subj.id)
+        // New API: subject is nested object { id, name, code }, not flat subject_id
+        const alloc = allocations.find((a: any) => (a.subject?.id ?? a.subject_id) === subj.id)
+        const teacherId = alloc?.teacher?.id ?? alloc?.teacher_id ?? null
         return {
           subjectId: subj.id,
           subjectName: subj.name,
           subjectCode: subj.code,
           allocationId: alloc?.id ?? null,
-          currentTeacherId: alloc?.teacher_id ?? null,
-          selectedTeacherId: alloc ? String(alloc.teacher_id) : '',
+          currentTeacherId: teacherId,
+          selectedTeacherId: teacherId ? String(teacherId) : '',
           saving: false,
           saved: false,
           error: null,
@@ -194,6 +199,8 @@ const MappingPage: FC = () => {
         class_section_id: Number(classSectionId),
         academic_session_id: Number(sessionId),
       })
+      // Reload from API to get the correct allocationId for future updates
+      await loadClassTeacher()
       setClassTeacher(prev => ({
         ...prev,
         saving: false,
