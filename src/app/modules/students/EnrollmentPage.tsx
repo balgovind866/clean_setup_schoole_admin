@@ -38,12 +38,24 @@ const EnrollmentPage: FC = () => {
   const [filterSection, setFilterSection] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [viewMode, setViewMode] = useState<'standard' | 'excel'>('standard')
+
+  // Handle search debounce
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1) // Reset to first page on search
+    }, 500)
+    return () => clearTimeout(handler)
+  }, [search])
 
   // Data state
   const [enrollments, setEnrollments] = useState<StudentEnrollmentModel[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(10)
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
 
@@ -87,7 +99,7 @@ const EnrollmentPage: FC = () => {
     setLoading(true)
     setError(null)
     try {
-      const params: any = { page, limit: 20 }
+      const params: any = { page, limit, search: debouncedSearch }
       if (filterSession) params.session_id = Number(filterSession)
       if (filterSection) params.class_section_id = Number(filterSection)
       if (filterStatus) params.status = filterStatus
@@ -102,7 +114,7 @@ const EnrollmentPage: FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [schoolId, page, filterSession, filterSection, filterStatus])
+  }, [schoolId, page, limit, debouncedSearch, filterSession, filterSection, filterStatus])
 
   useEffect(() => { fetchEnrollments() }, [fetchEnrollments])
 
@@ -129,12 +141,8 @@ const EnrollmentPage: FC = () => {
     }
   }
 
-  // Client-side search filter
-  const filtered = enrollments.filter(e => {
-    if (!search) return true
-    const name = `${e.student?.first_name || ''} ${e.student?.last_name || ''} ${e.roll_number}`.toLowerCase()
-    return name.includes(search.toLowerCase())
-  })
+  // Client-side search is moved to server-side
+  const filtered = enrollments
 
   const stats = {
     total,
@@ -147,32 +155,6 @@ const EnrollmentPage: FC = () => {
     <>
       <ToolbarWrapper />
       <Content>
-        {/* ── Stats ── */}
-        <div className='row g-5 mb-7'>
-          {[
-            { label: 'Total Enrollments', value: stats.total, color: 'primary', icon: 'ki-duotone ki-book-open' },
-            { label: 'Active', value: stats.active, color: 'success', icon: 'ki-duotone ki-verify' },
-            { label: 'Promoted', value: stats.promoted, color: 'info', icon: 'ki-duotone ki-award' },
-            { label: 'Dropped', value: stats.dropped, color: 'danger', icon: 'ki-duotone ki-cross-circle' },
-          ].map(({ label, value, color, icon }) => (
-            <div className='col-sm-6 col-xl-3' key={label}>
-              <div className={`card card-flush bg-light-${color} border-0 h-100`}>
-                <div className='card-body d-flex align-items-center py-5'>
-                  <div className={`symbol symbol-50px me-4 bg-${color} bg-opacity-15 rounded-circle`}>
-                    <div className='symbol-label d-flex align-items-center justify-content-center'>
-                      <i className={`${icon} fs-2x text-${color}`}><span className='path1'></span><span className='path2'></span></i>
-                    </div>
-                  </div>
-                  <div>
-                    <div className={`fs-2 fw-bolder text-${color}`}>{loading ? '—' : value}</div>
-                    <div className='text-gray-600 fw-semibold fs-7'>{label}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
         {error && <div className='alert alert-danger mb-5'>{error}</div>}
 
         {/* ── Filter Bar ── */}
@@ -230,23 +212,45 @@ const EnrollmentPage: FC = () => {
         <div className='card card-flush'>
           <div className='card-header align-items-center py-5 gap-2 gap-md-5'>
             <div className='card-title'>
-              <div className='d-flex align-items-center position-relative my-1'>
+              <div className='d-flex align-items-center position-relative my-1 me-4'>
                 <i className='ki-duotone ki-magnifier fs-3 position-absolute ms-4'>
                   <span className='path1'></span><span className='path2'></span>
                 </i>
                 <input type='text' className='form-control form-control-solid w-250px ps-14'
                   placeholder='Search by name or roll no...' value={search} onChange={e => setSearch(e.target.value)} />
               </div>
+              {!loading && (
+                <div className='d-flex align-items-center gap-3 d-none d-md-flex'>
+                  <span className='d-flex align-items-center gap-1 text-gray-600 fs-7 fw-semibold'>
+                    <span className='bullet bullet-dot bg-primary h-6px w-6px'></span>
+                    Total: <span className='text-primary fw-bold ms-1'>{stats.total}</span>
+                  </span>
+                  <span className='d-flex align-items-center gap-1 text-gray-600 fs-7 fw-semibold'>
+                    <span className='bullet bullet-dot bg-success h-6px w-6px'></span>
+                    Active: <span className='text-success fw-bold ms-1'>{stats.active}</span>
+                  </span>
+                  <span className='d-flex align-items-center gap-1 text-gray-600 fs-7 fw-semibold'>
+                    <span className='bullet bullet-dot bg-danger h-6px w-6px'></span>
+                    Dropped: <span className='text-danger fw-bold ms-1'>{stats.dropped}</span>
+                  </span>
+                </div>
+              )}
             </div>
             <div className='card-toolbar'>
-              <span className='text-muted fs-7 fw-semibold'>
-                {total} enrollment{total !== 1 ? 's' : ''} found
-              </span>
+              <div className='btn-group' role='group'>
+                  <button className={`btn btn-sm btn-icon ${viewMode === 'standard' ? 'btn-primary' : 'btn-light-primary'}`} onClick={() => setViewMode('standard')} title="Standard View">
+                      <i className='ki-duotone ki-element-11 fs-3'><span className='path1'></span><span className='path2'></span><span className='path3'></span><span className='path4'></span></i>
+                  </button>
+                  <button className={`btn btn-sm btn-icon ${viewMode === 'excel' ? 'btn-primary' : 'btn-light-primary'}`} onClick={() => setViewMode('excel')} title="Excel View">
+                      <i className='ki-duotone ki-row-horizontal fs-3'><span className='path1'></span><span className='path2'></span></i>
+                  </button>
+              </div>
             </div>
           </div>
           <div className='card-body pt-0'>
             <div className='table-responsive'>
-              <table className='table align-middle table-row-dashed fs-6 gy-5'>
+              {viewMode === 'standard' ? (
+                <table className='table align-middle table-row-dashed fs-6 gy-5'>
                 <thead>
                   <tr className='text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0'>
                     <th>#</th>
@@ -343,22 +347,111 @@ const EnrollmentPage: FC = () => {
                   ))}
                 </tbody>
               </table>
+              ) : (
+                <table className='table table-bordered table-striped align-middle fs-8 gy-3 text-nowrap'>
+                  <thead className='bg-light'>
+                    <tr className='text-start text-muted fw-bolder fs-8 text-uppercase gs-0'>
+                      <th>Roll No</th>
+                      <th>Session</th>
+                      <th>Class / Sec</th>
+                      <th>Enrolled On</th>
+                      <th>Student Name</th>
+                      <th>Gender</th>
+                      <th>DOB</th>
+                      <th>Blood Grp</th>
+                      <th>Mobile</th>
+                      <th>Email</th>
+                      <th>Father Name</th>
+                      <th>Father Phone</th>
+                      <th>Mother Name</th>
+                      <th>State / City</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className='text-gray-600 fw-semibold'>
+                    {loading ? (
+                        <tr><td colSpan={15} className='text-center py-10'><span className='spinner-border spinner-border-sm text-primary me-2'></span></td></tr>
+                    ) : filtered.length === 0 ? (
+                        <tr><td colSpan={15} className='text-center py-5'>No data</td></tr>
+                    ) : filtered.map(e => {
+                        const s = e.student || {} as any;
+                        const profile = s.profile || {} as any;
+                        const parent = s.parent || {} as any;
+                        const addressObj = s.address || (s as any).addresses;
+                        const address = (Array.isArray(addressObj) ? addressObj[0] : addressObj) || {} as any;
+
+                        return (
+                          <tr key={e.id}>
+                             <td className='text-dark fw-bold'>{e.roll_number}</td>
+                             <td>{e.academic_session?.session_year || '—'}</td>
+                             <td>
+                                 {e.class_section?.class?.name 
+                                    ? <span className='badge badge-light-info'>{e.class_section.class.name} / {e.class_section.section?.name || '-'}</span> 
+                                    : '—'}
+                             </td>
+                             <td>{e.enrollment_date ? new Date(e.enrollment_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                             <td className='text-dark fw-bold'>{s.first_name} {s.last_name}</td>
+                             <td className="text-capitalize">{profile.gender || '—'}</td>
+                             <td>{profile.dob ? profile.dob.split('T')[0] : '—'}</td>
+                             <td>{profile.blood_group || '—'}</td>
+                             <td>{s.mobile_number || '—'}</td>
+                             <td>{s.email}</td>
+                             <td>{parent.father_name || '—'}</td>
+                             <td>{parent.father_phone || '—'}</td>
+                             <td>{parent.mother_name || '—'}</td>
+                             <td>{address.current_state ? `${address.current_state} / ${address.current_city || '?'}` : '—'}</td>
+                             <td><StatusBadge status={e.status} /></td>
+                          </tr>
+                        )
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
 
             {/* Pagination */}
-            {totalPages > 1 && (
-              <div className='d-flex justify-content-end mt-5'>
-                <div className='d-flex gap-2'>
-                  <button className='btn btn-sm btn-light' disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-                    <i className='ki-duotone ki-arrow-left fs-4'><span className='path1'></span><span className='path2'></span></i> Prev
-                  </button>
-                  <span className='btn btn-sm btn-light disabled'>Page {page} of {totalPages}</span>
-                  <button className='btn btn-sm btn-light' disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-                    Next <i className='ki-duotone ki-arrow-right fs-4'><span className='path1'></span><span className='path2'></span></i>
-                  </button>
+            <div className='row mt-5 p-5'>
+                <div className='col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'>
+                    <div className='dataTables_length'>
+                        <label>
+                            <select
+                                className='form-select form-select-sm form-select-solid'
+                                value={limit}
+                                onChange={(e) => {
+                                    setLimit(Number(e.target.value))
+                                    setPage(1)
+                                }}
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </label>
+                    </div>
                 </div>
-              </div>
-            )}
+                <div className='col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'>
+                    <div className='dataTables_paginate paging_simple_numbers'>
+                        <ul className='pagination'>
+                            <li className={`paginate_button page-item previous ${page <= 1 ? 'disabled' : ''}`}>
+                                <button className='page-link' onClick={() => setPage(page - 1)} disabled={page <= 1}>
+                                    <i className='previous'></i>
+                                </button>
+                            </li>
+                            {[...Array(totalPages || 0)].map((_, i) => (
+                                <li key={i} className={`paginate_button page-item ${page === i + 1 ? 'active' : ''}`}>
+                                    <button className='page-link' onClick={() => setPage(i + 1)}>{i + 1}</button>
+                                </li>
+                            ))}
+                            <li className={`paginate_button page-item next ${page >= totalPages ? 'disabled' : ''}`}>
+                                <button className='page-link' onClick={() => setPage(page + 1)} disabled={page >= totalPages}>
+                                    <i className='next'></i>
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
           </div>
         </div>
       </Content>

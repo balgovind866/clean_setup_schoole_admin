@@ -155,6 +155,7 @@ export function getEnrollments(
     status?: EnrollmentStatus
     page?: number
     limit?: number
+    search?: string
   } = {}
 ) {
   return axios.get<EnrollmentsListResponse>(ENROLLMENTS_URL(schoolId), {
