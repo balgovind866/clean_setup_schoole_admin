@@ -32,6 +32,8 @@ const PrivateRoutes = () => {
   const PerformancePage = lazy(() => import('../modules/students/PerformancePage').then(m => ({ default: m.PerformanceWrapper })))
   const DocumentsPage = lazy(() => import('../modules/students/DocumentsPage').then(m => ({ default: m.DocumentsWrapper })))
 
+  const TeacherAssignmentsPage = lazy(() => import('../modules/teacher/AssignmentsPage').then(m => ({ default: m.AssignmentsPageWrapper })))
+
   return (
     <Routes>
       <Route element={<MasterLayout />}>
@@ -167,6 +169,9 @@ const PrivateRoutes = () => {
         <Route path='settings/roles' element={<SuspensedView><RouteConfig.settingsRoutes.roles /></SuspensedView>} />
         <Route path='settings/preferences' element={<SuspensedView><RouteConfig.settingsRoutes.preferences /></SuspensedView>} />
         <Route path='settings/backup' element={<SuspensedView><RouteConfig.settingsRoutes.backup /></SuspensedView>} />
+
+        {/* Teacher */}
+        <Route path='teacher/assignments' element={<SuspensedView><TeacherAssignmentsPage /></SuspensedView>} />
 
         <Route path='*' element={<Navigate to='/error/404' />} />
       </Route>

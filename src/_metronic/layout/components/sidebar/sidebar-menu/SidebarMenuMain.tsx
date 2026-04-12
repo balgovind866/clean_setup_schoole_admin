@@ -10,6 +10,7 @@ const SidebarMenuMain = () => {
 
   const isSuperAdmin = currentUser?.role === 'super_admin'
   const isAdmin = currentUser?.role === 'admin'
+  const isTeacher = currentUser?.role === 'teacher'
 
   // Check if user has permission to view a module
   const hasPermission = (moduleName: string) => {
@@ -47,6 +48,12 @@ const SidebarMenuMain = () => {
           {(isSuperAdmin || isAdmin || hasPermission('professions')) && (
             <SidebarMenuItem to='/administration/professions' title='Professions' hasBullet={true} />
           )}
+        </SidebarMenuItemWithSub>
+      )}
+
+      {isTeacher && (
+        <SidebarMenuItemWithSub to='/teacher' title='Teacher Workspace' icon='book' fontIcon='bi-book'>
+          <SidebarMenuItem to='/teacher/assignments' title='Assignments & HW' hasBullet={true} />
         </SidebarMenuItemWithSub>
       )}
 
