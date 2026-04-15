@@ -136,13 +136,13 @@ const AdministrationPage: FC = () => {
                     name: newSchool.name,
                     code: newSchool.code,
                     subdomain: newSchool.subdomain,
-                    db_host: newSchool.db_host,
+                    db_host: newSchool.db_host || '',
                     db_port: Number(newSchool.db_port),
-                    db_username: newSchool.db_username,
-                    db_password: newSchool.db_password,
-                    address: newSchool.address,
-                    phone: newSchool.phone,
-                    email: newSchool.email
+                    db_username: newSchool.db_username || '',
+                    db_password: newSchool.db_password || '',
+                    address: newSchool.address || '',
+                    phone: newSchool.phone || '',
+                    email: newSchool.email || ''
                 };
 
                 const { data: response } = await createSchool(payload);

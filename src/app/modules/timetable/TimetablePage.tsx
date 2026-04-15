@@ -494,7 +494,7 @@ const TimetablePage: FC = () => {
     const merges: any[] = []
 
     ALL_DAYS.forEach((day, rIndex) => {
-      const row = [day]
+      const row: string[] = [day]
       slots.forEach((s, cIndex) => {
         if (s.is_break) {
           if (rIndex === 0) {

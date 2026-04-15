@@ -62,7 +62,7 @@ const AssignmentsPage: FC = () => {
       const [sRes, cRes, subRes] = await Promise.all([
         getAcademicSessions(schoolId, 1, 100),
         getClasses(schoolId, 1, 100),
-        getSubjects(schoolId, 1, 100)
+        getSubjects(schoolId)
       ])
       if (sRes.data.success) {
         const _sessions = sRes.data.data.sessions || [];
