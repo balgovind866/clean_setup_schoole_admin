@@ -53,6 +53,7 @@ const SidebarMenuMain = () => {
 
       {isTeacher && (
         <SidebarMenuItemWithSub to='/teacher' title='Teacher Workspace' icon='book' fontIcon='bi-book'>
+          <SidebarMenuItem to='/teacher/attendance' title='Mark Attendance' hasBullet={true} />
           <SidebarMenuItem to='/teacher/assignments' title='Assignments & HW' hasBullet={true} />
         </SidebarMenuItemWithSub>
       )}

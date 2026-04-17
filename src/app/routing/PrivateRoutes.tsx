@@ -33,6 +33,7 @@ const PrivateRoutes = () => {
   const DocumentsPage = lazy(() => import('../modules/students/DocumentsPage').then(m => ({ default: m.DocumentsWrapper })))
 
   const TeacherAssignmentsPage = lazy(() => import('../modules/teacher/AssignmentsPage').then(m => ({ default: m.AssignmentsPageWrapper })))
+  const TeacherAttendancePage = lazy(() => import('../modules/teacher/TeacherAttendancePage').then(m => ({ default: m.TeacherAttendancePageWrapper })))
 
   return (
     <Routes>
@@ -173,6 +174,7 @@ const PrivateRoutes = () => {
 
         {/* Teacher */}
         <Route path='teacher/assignments' element={<SuspensedView><TeacherAssignmentsPage /></SuspensedView>} />
+        <Route path='teacher/attendance' element={<SuspensedView><TeacherAttendancePage /></SuspensedView>} />
 
         <Route path='*' element={<Navigate to='/error/404' />} />
       </Route>

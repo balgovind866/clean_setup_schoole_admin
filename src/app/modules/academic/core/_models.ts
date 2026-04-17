@@ -4,6 +4,7 @@ export interface SessionModel {
   start_date: string;
   end_date: string;
   is_current: boolean;
+  attendance_mode: 'DAILY' | 'PERIOD';
   createdAt?: string;
   updatedAt?: string;
 }
@@ -13,6 +14,7 @@ export interface SessionCreationData {
   start_date: string;
   end_date: string;
   is_current: boolean;
+  attendance_mode: 'DAILY' | 'PERIOD';
 }
 
 export interface SessionsListResponse {

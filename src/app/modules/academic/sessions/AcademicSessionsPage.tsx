@@ -4,11 +4,11 @@ import { ToolbarWrapper } from '../../../../_metronic/layout/components/toolbar'
 import { Content } from '../../../../_metronic/layout/components/content'
 import { Modal, Button, Alert } from 'react-bootstrap'
 import { useAuth } from '../../auth'
-import { 
-    getAcademicSessions, 
-    createAcademicSession, 
-    updateAcademicSession, 
-    deleteAcademicSession, 
+import {
+    getAcademicSessions,
+    createAcademicSession,
+    updateAcademicSession,
+    deleteAcademicSession,
     setCurrentAcademicSession
 } from '../core/_requests'
 import { SessionModel } from '../core/_models'
@@ -16,7 +16,7 @@ import { SessionModel } from '../core/_models'
 const AcademicSessionsPage: FC = () => {
     const { currentUser } = useAuth();
     const schoolId = currentUser?.schoolId || '';
-    
+
     const [sessions, setSessions] = useState<SessionModel[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -24,12 +24,13 @@ const AcademicSessionsPage: FC = () => {
     const [showModal, setShowModal] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [currentId, setCurrentId] = useState<number | null>(null);
-    
+
     const [formData, setFormData] = useState({
         session_year: '',
         start_date: '',
         end_date: '',
-        is_current: false
+        is_current: false,
+        attendance_mode: 'DAILY' as 'DAILY' | 'PERIOD'
     });
 
     useEffect(() => {
@@ -48,7 +49,7 @@ const AcademicSessionsPage: FC = () => {
                 setSessions(response.data.sessions || []);
             }
         } catch (err: any) {
-             setError(err.response?.data?.message || "Failed to load sessions");
+            setError(err.response?.data?.message || "Failed to load sessions");
         } finally {
             setLoading(false);
         }
@@ -63,7 +64,8 @@ const AcademicSessionsPage: FC = () => {
                 session_year: session.session_year,
                 start_date: session.start_date.split('T')[0], // Extract YYYY-MM-DD
                 end_date: session.end_date.split('T')[0],
-                is_current: session.is_current
+                is_current: session.is_current,
+                attendance_mode: session.attendance_mode || 'DAILY'
             });
         } else {
             setIsEditMode(false);
@@ -72,7 +74,8 @@ const AcademicSessionsPage: FC = () => {
                 session_year: '',
                 start_date: '',
                 end_date: '',
-                is_current: false
+                is_current: false,
+                attendance_mode: 'DAILY'
             });
         }
         setShowModal(true);
@@ -111,8 +114,8 @@ const AcademicSessionsPage: FC = () => {
 
     const handleDelete = async (id: number, is_current: boolean) => {
         if (is_current) {
-             setError("Active sessions cannot be deleted. Please set another session as active first.");
-             return;
+            setError("Active sessions cannot be deleted. Please set another session as active first.");
+            return;
         }
         if (!window.confirm("Are you sure you want to delete this session?")) return;
         setLoading(true);
@@ -151,6 +154,7 @@ const AcademicSessionsPage: FC = () => {
                                 <tr className='text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0'>
                                     <th>Session Year</th>
                                     <th>Duration</th>
+                                    <th>Attendance Mode</th>
                                     <th>Status</th>
                                     <th className='text-end'>Actions</th>
                                 </tr>
@@ -158,11 +162,11 @@ const AcademicSessionsPage: FC = () => {
                             <tbody className='fw-semibold text-gray-600'>
                                 {loading && sessions.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className='text-center py-10'>Loading...</td>
+                                        <td colSpan={5} className='text-center py-10'>Loading...</td>
                                     </tr>
                                 ) : sessions.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className='text-center py-10'>No sessions found.</td>
+                                        <td colSpan={5} className='text-center py-10'>No sessions found.</td>
                                     </tr>
                                 ) : (
                                     sessions.map((session) => (
@@ -170,13 +174,18 @@ const AcademicSessionsPage: FC = () => {
                                             <td><span className='text-gray-800 fw-bold'>{session.session_year}</span></td>
                                             <td>{new Date(session.start_date).toLocaleDateString()} to {new Date(session.end_date).toLocaleDateString()}</td>
                                             <td>
+                                                <div className={`badge badge-light-${session.attendance_mode === 'PERIOD' ? 'warning' : 'info'}`}>
+                                                    {session.attendance_mode === 'PERIOD' ? '⏱ Period-wise' : ' Daily'}
+                                                </div>
+                                            </td>
+                                            <td>
                                                 <div className={`badge badge-light-${session.is_current ? 'success' : 'secondary'}`}>
                                                     {session.is_current ? 'Current' : 'Past'}
                                                 </div>
                                             </td>
                                             <td className='text-end'>
                                                 {!session.is_current && (
-                                                    <button 
+                                                    <button
                                                         className='btn btn-icon btn-bg-light btn-active-color-success btn-sm me-1'
                                                         title='Set as Current'
                                                         onClick={() => handleSetCurrent(session.id)}
@@ -184,14 +193,14 @@ const AcademicSessionsPage: FC = () => {
                                                         <i className='ki-duotone ki-check-square fs-2'><span className='path1'></span><span className='path2'></span></i>
                                                     </button>
                                                 )}
-                                                <button 
+                                                <button
                                                     className='btn btn-icon btn-bg-light btn-active-color-primary btn-sm me-1'
                                                     title='Edit'
                                                     onClick={() => handleOpenModal(session)}
                                                 >
                                                     <i className='ki-duotone ki-pencil fs-2'><span className='path1'></span><span className='path2'></span></i>
                                                 </button>
-                                                <button 
+                                                <button
                                                     className='btn btn-icon btn-bg-light btn-active-color-danger btn-sm'
                                                     title='Delete'
                                                     onClick={() => handleDelete(session.id, session.is_current)}
@@ -219,23 +228,41 @@ const AcademicSessionsPage: FC = () => {
                         <div className='row g-9 mb-8'>
                             <div className='col-md-12 fv-row'>
                                 <label className='required fs-6 fw-semibold mb-2'>Session Year (e.g. 2024-2025)</label>
-                                <input type='text' className='form-control form-control-solid' placeholder='2024-2025' value={formData.session_year} onChange={(e) => setFormData({...formData, session_year: e.target.value})} required />
+                                <input type='text' className='form-control form-control-solid' placeholder='2024-2025' value={formData.session_year} onChange={(e) => setFormData({ ...formData, session_year: e.target.value })} required />
                             </div>
                         </div>
                         <div className='row g-9 mb-8'>
                             <div className='col-md-6 fv-row'>
                                 <label className='required fs-6 fw-semibold mb-2'>Start Date</label>
-                                <input type='date' className='form-control form-control-solid' value={formData.start_date} onChange={(e) => setFormData({...formData, start_date: e.target.value})} required />
+                                <input type='date' className='form-control form-control-solid' value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} required />
                             </div>
                             <div className='col-md-6 fv-row'>
                                 <label className='required fs-6 fw-semibold mb-2'>End Date</label>
-                                <input type='date' className='form-control form-control-solid' value={formData.end_date} onChange={(e) => setFormData({...formData, end_date: e.target.value})} required />
+                                <input type='date' className='form-control form-control-solid' value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} required />
                             </div>
                         </div>
                         <div className='row g-9 mb-8'>
-                            <div className='col-md-12 fv-row'>
+                            <div className='col-md-6 fv-row'>
+                                <label className='required fs-6 fw-semibold mb-2'>Attendance Mode</label>
+                                <select
+                                    className='form-select form-select-solid'
+                                    value={formData.attendance_mode}
+                                    onChange={(e) => setFormData({ ...formData, attendance_mode: e.target.value as 'DAILY' | 'PERIOD' })}
+                                    required
+                                >
+                                    <option value='DAILY'>Daily (Once per day)</option>
+                                    <option value='PERIOD'>Period-wise (For each period)</option>
+                                </select>
+
+                                <div className='form-text text-muted mt-1'>
+                                    {formData.attendance_mode === 'PERIOD'
+                                        ? ' In Period mode, attendance will be taken separately for each subject period.'
+                                        : ' In Daily mode, a student will be marked present/absent only once per day.'}
+                                </div>
+                            </div>
+                            <div className='col-md-6 fv-row d-flex align-items-center'>
                                 <div className="form-check form-switch form-check-custom form-check-solid">
-                                    <input className="form-check-input" type="checkbox" id="isCurrentRole" checked={formData.is_current} onChange={(e) => setFormData({...formData, is_current: e.target.checked})} />
+                                    <input className="form-check-input" type="checkbox" id="isCurrentRole" checked={formData.is_current} onChange={(e) => setFormData({ ...formData, is_current: e.target.checked })} />
                                     <label className="form-check-label ms-3 fw-semibold text-gray-700" htmlFor="isCurrentRole">Set as Current (Active) Session</label>
                                 </div>
                             </div>
