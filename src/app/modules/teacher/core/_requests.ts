@@ -13,7 +13,9 @@ export function getMyAssignments(
 }
 
 export function getAssignmentDetails(schoolId: string | number, assignmentId: string | number) {
-  return axios.get<{ success: boolean; data: { assignment: AssignmentModel & { submissions: AssignmentSubmissionModel[] } } }>(`${API_URL}/school/${schoolId}/teacher-app/assignments/${assignmentId}`)
+  return axios.get<{ success: boolean; data: { assignment: AssignmentModel & { submissions: AssignmentSubmissionModel[] } } }>(
+    `${API_URL}/school/${schoolId}/teacher-app/assignments/${assignmentId}`
+  )
 }
 
 export function createAssignment(schoolId: string | number, data: FormData) {
@@ -40,33 +42,36 @@ export function evaluateSubmission(
   return axios.patch(`${API_URL}/school/${schoolId}/teacher-app/assignment-submissions/${submissionId}/evaluate`, payload)
 }
 
-// ─── Attendance ───────────────────────────────────────────────────────────────
+// ─── Session ──────────────────────────────────────────────────────────────────
 
-/** GET teacher's assigned sections for active session */
+/** GET all sessions — response: { success, data: [...sessions with attendance_mode] } */
+export function getTeacherSessions(schoolId: string | number) {
+  return axios.get(`${API_URL}/school/${schoolId}/teacher-app/sessions`)
+}
+
+// ─── Sections (used in DAILY mode) ───────────────────────────────────────────
+
+/** GET teacher's assigned sections → { success, data: { sessions_id, sections: [...] } } */
 export function getMySections(schoolId: string | number) {
   return axios.get(`${API_URL}/school/${schoolId}/teacher-app/sections`)
 }
 
-/** GET students + their attendance for a section on a specific date */
-export function getSectionAttendance(
-  schoolId: string | number,
-  classSectionId: number,
-  date: string
-) {
+/** GET students + daily attendance for a section on a date
+ *  → { success, data: { date, session_id, class_section_id, summary, students } }
+ */
+export function getSectionAttendance(schoolId: string | number, classSectionId: number, date: string) {
   return axios.get(`${API_URL}/school/${schoolId}/teacher-app/sections/${classSectionId}/attendance`, {
     params: { date }
   })
 }
 
-/** POST mark DAILY attendance for a section via teacher-app route */
+/** POST mark DAILY attendance for a section
+ *  Body: { date, session_id?, students: [{student_id, status, remark?}] }
+ */
 export function markDailyAttendance(
   schoolId: string | number,
   classSectionId: number,
-  payload: {
-    date: string
-    session_id?: number
-    students: { student_id: number; status: string; remark?: string }[]
-  }
+  payload: { date: string; session_id?: number; students: { student_id: number; status: string; remark?: string }[] }
 ) {
   return axios.post(
     `${API_URL}/school/${schoolId}/teacher-app/sections/${classSectionId}/attendance`,
@@ -74,26 +79,54 @@ export function markDailyAttendance(
   )
 }
 
-/** POST mark PERIOD attendance via main school route */
-export function markPeriodAttendance(
-  schoolId: string | number,
-  payload: {
-    class_section_id: number
-    academic_session_id: number
-    timetable_entry_id: number
-    date: string
-    students: { student_id: number; status: string; remark?: string }[]
-  }
-) {
-  return axios.post(`${API_URL}/school/${schoolId}/attendance/students/mark-period`, payload)
+// ─── Period-wise Attendance ───────────────────────────────────────────────────
+
+/** GET today's all periods for the teacher with attendance_marked status
+ *  → { success, data: { date, day_of_week, session_id, attendance_mode, total_periods, periods: [...] } }
+ */
+export function getTodayPeriods(schoolId: string | number, date: string) {
+  return axios.get(`${API_URL}/school/${schoolId}/teacher-app/attendance/today-periods`, {
+    params: { date }
+  })
 }
 
-/** GET section timetable (for period-wise period picker) */
+/** GET students + their period attendance for a specific timetable_entry_id + date
+ *  → { success, data: { date, timetable_entry_id, session_id, attendance_mode, period, subject, class_section, summary, students } }
+ */
+export function getPeriodStudents(schoolId: string | number, timetableEntryId: number, date: string) {
+  return axios.get(
+    `${API_URL}/school/${schoolId}/teacher-app/attendance/periods/${timetableEntryId}/students`,
+    { params: { date } }
+  )
+}
+
+/** POST mark PERIOD attendance for a specific timetable_entry_id
+ *  Body: { date, students: [{student_id, status, remark?}] }
+ */
+export function markPeriodAttendanceByEntry(
+  schoolId: string | number,
+  timetableEntryId: number,
+  payload: { date: string; students: { student_id: number; status: string; remark?: string }[] }
+) {
+  return axios.post(
+    `${API_URL}/school/${schoolId}/teacher-app/attendance/periods/${timetableEntryId}/mark`,
+    payload
+  )
+}
+
+/** GET section timetable (all days) */
 export function getSectionTimetable(schoolId: string | number, classSectionId: number) {
   return axios.get(`${API_URL}/school/${schoolId}/teacher-app/sections/${classSectionId}/timetable`)
 }
 
-/** GET current active session info (includes attendance_mode) */
-export function getTeacherSessions(schoolId: string | number) {
-  return axios.get(`${API_URL}/school/${schoolId}/teacher-app/sessions`)
+/** @deprecated use getTodayPeriods/markPeriodAttendanceByEntry instead */
+export function markPeriodAttendance(
+  schoolId: string | number,
+  payload: {
+    class_section_id: number; academic_session_id: number;
+    timetable_entry_id: number; date: string;
+    students: { student_id: number; status: string; remark?: string }[]
+  }
+) {
+  return axios.post(`${API_URL}/school/${schoolId}/attendance/students/mark-period`, payload)
 }

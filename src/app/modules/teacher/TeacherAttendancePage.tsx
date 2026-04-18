@@ -4,218 +4,215 @@ import { ToolbarWrapper } from '../../../_metronic/layout/components/toolbar'
 import { Content } from '../../../_metronic/layout/components/content'
 import { useAuth } from '../auth'
 import {
+  getTeacherSessions,
   getMySections,
   getSectionAttendance,
   markDailyAttendance,
-  markPeriodAttendance,
-  getSectionTimetable,
-  getTeacherSessions,
+  getTodayPeriods,
+  getPeriodStudents,
+  markPeriodAttendanceByEntry,
 } from './core/_requests'
+import { toast } from 'react-toastify'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Section {
-  class_section_id: number
-  class_name: string
-  section_name: string
-  label: string
-  is_class_teacher: boolean
-}
-
-interface StudentRow {
-  student_id: number
-  roll_number: string
-  full_name: string
-  photo_url: string | null
-  status: 'PRESENT' | 'ABSENT' | 'LATE' | 'HALF_DAY' | 'NOT_MARKED'
-  remark: string
-}
-
-interface TimetableEntry {
-  id: number
-  day_of_week: string
-  subject?: { id: number; name: string; code: string }
-  period_slot?: { start_time: string; end_time: string }
-}
+type AttendanceMode = 'DAILY' | 'PERIOD'
+type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'HALF_DAY' | 'NOT_MARKED'
 
 interface SessionInfo {
   id: number
   session_year: string
-  attendance_mode: 'DAILY' | 'PERIOD'
+  attendance_mode: AttendanceMode
   is_current: boolean
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const STATUS_OPTIONS = ['PRESENT', 'ABSENT', 'LATE', 'HALF_DAY'] as const
-type AttendanceStatus = typeof STATUS_OPTIONS[number]
-
-const STATUS_CONFIG: Record<AttendanceStatus, { label: string; btnClass: string; badgeClass: string; icon: string }> = {
-  PRESENT:  { label: 'Present',  btnClass: 'btn-success',   badgeClass: 'badge-light-success', icon: '✓' },
-  ABSENT:   { label: 'Absent',   btnClass: 'btn-danger',    badgeClass: 'badge-light-danger',  icon: '✗' },
-  LATE:     { label: 'Late',     btnClass: 'btn-warning',   badgeClass: 'badge-light-warning', icon: '⏰' },
-  HALF_DAY: { label: 'Half Day', btnClass: 'btn-info',      badgeClass: 'badge-light-info',    icon: '½' },
+interface Section {
+  class_section_id: number
+  label: string
+  class_name: string
+  section_name: string
+  is_class_teacher: boolean
 }
 
-const DAY_NAMES = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+interface Student {
+  student_id: number
+  roll_number: string
+  full_name: string
+  photo_url: string | null
+  status: AttendanceStatus
+  remark: string
+}
+
+interface PeriodEntry {
+  timetable_entry_id: number
+  day_of_week: string
+  attendance_marked: boolean
+  period_slot: { id?: number; name?: string; start_time: string; end_time: string }
+  subject: { id: number; name: string; code: string }
+  class_section: { id: number; label: string; class_id?: number; section_id?: number }
+}
+
 const todayStr = () => new Date().toISOString().split('T')[0]
-const todayDay = DAY_NAMES[new Date().getDay()]
 
-// ─── Wrapper Export ───────────────────────────────────────────────────────────
+// ─── Wrapper ──────────────────────────────────────────────────────────────────
 
-export const TeacherAttendancePageWrapper: FC = () => <TeacherAttendancePage />
+export const TeacherAttendancePageWrapper: FC = () => (
+  <>
+    <PageTitle breadcrumbs={[]}>Mark Attendance</PageTitle>
+    <TeacherAttendancePage />
+  </>
+)
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 const TeacherAttendancePage: FC = () => {
   const { currentUser } = useAuth()
   const schoolId = currentUser?.schoolId || ''
 
-  // ─ Core state ─
+  // ── Session ──
   const [session, setSession] = useState<SessionInfo | null>(null)
+  const [loadingSession, setLoadingSession] = useState(true)
+
+  // ── DAILY mode state ──
   const [sections, setSections] = useState<Section[]>([])
-  const [selectedSection, setSelectedSection] = useState<Section | null>(null)
-  const [selectedDate, setSelectedDate] = useState<string>(todayStr())
-  const [students, setStudents] = useState<StudentRow[]>([])
+  const [selectedSectionId, setSelectedSectionId] = useState<string>('')
 
-  // ─ Period-wise state ─
-  const [timetableEntries, setTimetableEntries] = useState<TimetableEntry[]>([])
-  const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null)
+  // ── PERIOD mode state ──
+  const [periods, setPeriods] = useState<PeriodEntry[]>([])
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string>('')
 
-  // ─ UI state ─
-  const [loadingInit, setLoadingInit] = useState(false)
+  // ── Shared ──
+  const [selectedDate, setSelectedDate] = useState(todayStr())
+  const [students, setStudents] = useState<Student[]>([])
+  const [loadingLeft, setLoadingLeft] = useState(false)
   const [loadingStudents, setLoadingStudents] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // STEP 1: Load session + my sections on mount
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  // STEP 1: On mount → fetch session, detect mode, load left panel
+  // ════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!schoolId) return
-    initPage()
+    bootstrapPage()
   }, [schoolId])
 
-  const initPage = async () => {
-    setLoadingInit(true)
-    setErrorMsg(null)
+  const bootstrapPage = async () => {
+    setLoadingSession(true)
     try {
-      // ── Fetch session (backend returns: { success, data: [...sessions] }) ──
       const sessRes = await getTeacherSessions(schoolId)
-      const rawSessions: any[] = Array.isArray(sessRes.data?.data)
-        ? sessRes.data.data
-        : []
+      const allSessions: SessionInfo[] = Array.isArray(sessRes.data?.data) ? sessRes.data.data : []
+      const active = allSessions.find(s => s.is_current) || allSessions[0] || null
+      setSession(active)
 
-      // Pick current session, fallback to first
-      const activeSession: SessionInfo = rawSessions.find((s: any) => s.is_current)
-        || rawSessions[0]
-        || null
-
-      setSession(activeSession)
-
-      // ── Fetch my assigned sections ──
-      const secRes = await getMySections(schoolId)
-      // Backend: { success, data: { session_id, session_name, sections: [...] } }
-      const sectionList: Section[] = secRes.data?.data?.sections || []
-      setSections(sectionList)
-
-      if (sectionList.length > 0) {
-        setSelectedSection(sectionList[0])
+      if (active?.attendance_mode === 'PERIOD') {
+        await loadPeriods(todayStr(), active)
+      } else {
+        await loadSections()
       }
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.error || err.response?.data?.message || 'Failed to load page data. Check your login.')
+      toast.error(err.response?.data?.error || 'Failed to load session data.')
     } finally {
-      setLoadingInit(false)
+      setLoadingSession(false)
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // STEP 2: On section/date change → fetch students + attendance status
-  // ─────────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!selectedSection) return
-    fetchStudents()
-  }, [selectedSection, selectedDate])
-
-  const fetchStudents = useCallback(async () => {
-    if (!selectedSection || !schoolId) return
-    setLoadingStudents(true)
-    setErrorMsg(null)
+  const loadSections = async () => {
+    setLoadingLeft(true)
     try {
-      // Backend: { success, data: { students: [{ student_id, roll_number, full_name, photo_url, status }] } }
-      const res = await getSectionAttendance(schoolId, selectedSection.class_section_id, selectedDate)
-      const raw: any[] = res.data?.data?.students || []
-      setStudents(
-        raw.map(s => ({
-          student_id: s.student_id,
-          roll_number: s.roll_number || '-',
-          full_name: s.full_name,
-          photo_url: s.photo_url || null,
-          status: (s.status as string) === 'NOT_MARKED' ? 'NOT_MARKED' : (s.status as AttendanceStatus),
-          remark: '',
-        }))
-      )
+      const res = await getMySections(schoolId)
+      const list: Section[] = res.data?.data?.sections || []
+      setSections(list)
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.error || 'Student list load nahi ho saka.')
+      toast.error('Sections load nahi ho sake.')
+    } finally {
+      setLoadingLeft(false)
+    }
+  }
+
+  const loadPeriods = async (date: string, sess?: SessionInfo | null) => {
+    setLoadingLeft(true)
+    setStudents([])
+    setSelectedPeriodId('')
+    try {
+      const res = await getTodayPeriods(schoolId, date)
+      const list: PeriodEntry[] = res.data?.data?.periods || []
+      setPeriods(list)
+    } catch (err: any) {
+      toast.error('Periods load nahi ho sake.')
+    } finally {
+      setLoadingLeft(false)
+    }
+  }
+
+  const fetchAttendance = useCallback(async () => {
+    if (!schoolId || !session) return
+
+    setLoadingStudents(true)
+    setStudents([])
+
+    try {
+      if (session.attendance_mode === 'DAILY') {
+        if (!selectedSectionId) {
+            toast.warning('Please select a Section')
+            setLoadingStudents(false)
+            return
+        }
+        const res = await getSectionAttendance(schoolId, parseInt(selectedSectionId), selectedDate)
+        const raw: any[] = res.data?.data?.students || []
+        setStudents(mapStudents(raw))
+      } else {
+        if (!selectedPeriodId) {
+            toast.warning('Please select a Period')
+            setLoadingStudents(false)
+            return
+        }
+        const res = await getPeriodStudents(schoolId, parseInt(selectedPeriodId), selectedDate)
+        const raw: any[] = res.data?.data?.students || []
+        setStudents(mapStudents(raw))
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Students load nahi ho sake.')
     } finally {
       setLoadingStudents(false)
     }
-  }, [selectedSection, selectedDate, schoolId])
+  }, [session, selectedSectionId, selectedPeriodId, selectedDate, schoolId])
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // STEP 3: On section change in PERIOD mode → fetch today's timetable
-  // ─────────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!selectedSection || session?.attendance_mode !== 'PERIOD') return
-    fetchTimetable()
-  }, [selectedSection, session])
+  const mapStudents = (raw: any[]): Student[] =>
+    raw.map(s => ({
+      student_id: s.student_id,
+      roll_number: s.roll_number || '-',
+      full_name: s.full_name,
+      photo_url: s.photo_url || null,
+      status: (s.status as AttendanceStatus) || 'NOT_MARKED',
+      remark: s.remark || '',
+    }))
 
-  const fetchTimetable = useCallback(async () => {
-    if (!selectedSection || !schoolId) return
-    try {
-      // Backend: { success, data: { MONDAY: [...], TUESDAY: [...], ... } }
-      const res = await getSectionTimetable(schoolId, selectedSection.class_section_id)
-      const byDay: Record<string, TimetableEntry[]> = res.data?.data || {}
-      const entries: TimetableEntry[] = byDay[todayDay] || []
-      setTimetableEntries(entries)
-      setSelectedPeriodId(entries[0]?.id || null)
-    } catch {
-      setTimetableEntries([])
-      setSelectedPeriodId(null)
-    }
-  }, [selectedSection, schoolId])
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Handlers
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  const updateStatus = (studentId: number, status: AttendanceStatus) =>
-    setStudents(prev => prev.map(s => s.student_id === studentId ? { ...s, status } : s))
-
-  const updateRemark = (studentId: number, remark: string) =>
-    setStudents(prev => prev.map(s => s.student_id === studentId ? { ...s, remark } : s))
-
-  const markAllStatus = (status: AttendanceStatus) =>
-    setStudents(prev => prev.map(s => ({ ...s, status })))
-
-  const handleSectionSelect = (sec: Section) => {
+  const handleDateChange = (date: string) => {
+    setSelectedDate(date)
     setStudents([])
-    setTimetableEntries([])
-    setSelectedSection(sec)
+    if (session?.attendance_mode === 'PERIOD') {
+      loadPeriods(date)
+    }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Submit Attendance
-  // ─────────────────────────────────────────────────────────────────────────────
-  const handleSubmit = async () => {
-    if (!selectedSection || !session) return
+  const updateStatus = (id: number, status: Exclude<AttendanceStatus, 'NOT_MARKED'>) =>
+    setStudents(prev => prev.map(s => s.student_id === id ? { ...s, status } : s))
 
-    // Check for unmarked
+  const updateRemark = (id: number, remark: string) =>
+    setStudents(prev => prev.map(s => s.student_id === id ? { ...s, remark } : s))
+
+  const markAll = (status: Exclude<AttendanceStatus, 'NOT_MARKED'>) =>
+    setStudents(prev => prev.map(s => ({ ...s, status })))
+
+  const handleSubmit = async () => {
+    if (!session) return
+
     const unmarked = students.filter(s => s.status === 'NOT_MARKED')
     if (unmarked.length > 0) {
-      const proceed = window.confirm(`${unmarked.length} students ki attendance mark nahi ki gayi. Kya baaki ${students.length - unmarked.length} students ki attend submit karein?`)
-      if (!proceed) return
+      const ok = window.confirm(`${unmarked.length} students unmarked hain. Baaki ${students.length - unmarked.length} ki attendance submit karein?`)
+      if (!ok) return
     }
 
     const payload = students
@@ -223,452 +220,274 @@ const TeacherAttendancePage: FC = () => {
       .map(s => ({ student_id: s.student_id, status: s.status, remark: s.remark || '' }))
 
     if (payload.length === 0) {
-      setErrorMsg('Kam se kam ek student ki attendance mark karo.')
-      return
-    }
-
-    // PERIOD mode validation
-    if (session.attendance_mode === 'PERIOD' && !selectedPeriodId) {
-      setErrorMsg('Period-wise mode mein pehle ek period select karo.')
+      toast.warning('Koi attendance mark nahi ki gayi.')
       return
     }
 
     setSubmitting(true)
-    setErrorMsg(null)
-    setSuccessMsg(null)
 
     try {
       if (session.attendance_mode === 'PERIOD') {
-        await markPeriodAttendance(schoolId, {
-          class_section_id: selectedSection.class_section_id,
-          academic_session_id: session.id,
-          timetable_entry_id: selectedPeriodId!,
-          date: selectedDate,
-          students: payload,
+        const periodId = parseInt(selectedPeriodId)
+        if (!periodId) { toast.error('Period select karo.'); setSubmitting(false); return }
+        await markPeriodAttendanceByEntry(schoolId, periodId, {
+            date: selectedDate,
+            students: payload,
         })
-        const periodName = timetableEntries.find(e => e.id === selectedPeriodId)?.subject?.name || `Period ${selectedPeriodId}`
-        setSuccessMsg(`✅ "${periodName}" period ki attendance ${payload.length} students ke liye submit ho gayi!`)
+        setShowSuccessModal(true)
+        loadPeriods(selectedDate)
+        fetchAttendance()
       } else {
-        await markDailyAttendance(schoolId, selectedSection.class_section_id, {
-          date: selectedDate,
-          session_id: session.id,
-          students: payload,
+        const sectionId = parseInt(selectedSectionId)
+        if (!sectionId) { toast.error('Section select karo.'); setSubmitting(false); return }
+        await markDailyAttendance(schoolId, sectionId, {
+            date: selectedDate,
+            session_id: session.id,
+            students: payload,
         })
-        setSuccessMsg(`✅ Daily attendance ${payload.length} students ke liye successfully submit ho gayi!`)
+        setShowSuccessModal(true)
+        fetchAttendance()
       }
-      fetchStudents() // Refresh to show updated statuses
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.error || err.response?.data?.message || 'Attendance submit karne mein error aaya.')
+      toast.error(err.response?.data?.error || err.response?.data?.message || 'Submit error')
     } finally {
       setSubmitting(false)
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Computed stats
-  // ─────────────────────────────────────────────────────────────────────────────
-  const total    = students.length
-  const present  = students.filter(s => s.status === 'PRESENT').length
-  const absent   = students.filter(s => s.status === 'ABSENT').length
-  const late     = students.filter(s => s.status === 'LATE').length
-  const halfDay  = students.filter(s => s.status === 'HALF_DAY').length
-  const notMarked = students.filter(s => s.status === 'NOT_MARKED').length
-  const pct = total > 0 ? Math.round(((present + halfDay) / total) * 100) : 0
-  const isPeriodMode = session?.attendance_mode === 'PERIOD'
-  const selectedPeriod = timetableEntries.find(e => e.id === selectedPeriodId)
+  const filteredStudents = students.filter(s => {
+    if (!search) return true
+    return s.full_name.toLowerCase().includes(search.toLowerCase())
+  })
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Render
-  // ─────────────────────────────────────────────────────────────────────────────
+  const isPeriod = session?.attendance_mode === 'PERIOD'
+  const STATUSES: Exclude<AttendanceStatus, 'NOT_MARKED'>[] = ['PRESENT', 'ABSENT', 'LATE', 'HALF_DAY']
+  const isAlreadyMarked = isPeriod && periods.find(p => p.timetable_entry_id === parseInt(selectedPeriodId))?.attendance_marked
+
   return (
     <>
-      <PageTitle breadcrumbs={[]}>Mark Attendance</PageTitle>
       <ToolbarWrapper />
       <Content>
-
-        {/* ── Session Info Banner ── */}
-        {loadingInit ? (
-          <div className='text-center py-10'>
-            <div className='spinner-border text-primary' role='status' />
-            <p className='mt-3 text-muted'>Loading session data...</p>
-          </div>
-        ) : session ? (
-          <div className={`alert d-flex align-items-center mb-6 border-0 ${isPeriodMode ? 'alert-warning' : 'alert-primary'}`}
-            style={{ borderRadius: '12px' }}>
-            <div className='me-4' style={{ fontSize: '2rem' }}>
-              {isPeriodMode ? '⏱' : '📅'}
-            </div>
-            <div className='flex-grow-1'>
-              <div className='fw-bold fs-5'>
-                Academic Session: <span className='text-gray-900'>{session.session_year}</span>
-                <span className={`ms-3 badge ${isPeriodMode ? 'badge-warning' : 'badge-primary'} fs-8`}>
-                  {isPeriodMode ? 'Period-wise Mode' : 'Daily Mode'}
-                </span>
-                {session.is_current && <span className='ms-2 badge badge-light-success fs-8'>Current</span>}
-              </div>
-              <div className='text-muted fs-7 mt-1'>
-                {isPeriodMode
-                  ? '⚠️ Is session mein attendance har period ke liye alag-alag mark hoti hai. Niche period select karo.'
-                  : '✅ Is session mein student ko din mein sirf ek baar present/absent mark karna hai.'}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className='alert alert-danger mb-6'>
-            ❌ Koi active academic session nahi mili. Admin se session create karne ko bolein.
-          </div>
-        )}
-
-        {/* ── Alerts ── */}
-        {successMsg && (
-          <div className='alert alert-success d-flex align-items-center mb-5'>
-            <span className='me-3 fs-3'>✅</span>
-            <div className='flex-grow-1'>{successMsg}</div>
-            <button className='btn-close' onClick={() => setSuccessMsg(null)} />
-          </div>
-        )}
-        {errorMsg && (
-          <div className='alert alert-danger d-flex align-items-center mb-5'>
-            <span className='me-3 fs-3'>❌</span>
-            <div className='flex-grow-1'>{errorMsg}</div>
-            <button className='btn-close' onClick={() => setErrorMsg(null)} />
-          </div>
-        )}
-
-        <div className='row g-6'>
-          {/* ════════════════════════════════════════
-              LEFT PANEL — Section / Date / Period
-          ════════════════════════════════════════ */}
-          <div className='col-xl-3 col-lg-4'>
-
-            {/* My Sections */}
-            <div className='card card-flush shadow-sm mb-5'>
-              <div className='card-header min-h-50px'>
-                <h6 className='card-title fw-bold text-gray-700'>
-                  <i className='ki-duotone ki-people fs-4 me-2'>
-                    <span className='path1'></span><span className='path2'></span>
-                  </i>
-                  My Sections
-                </h6>
-              </div>
-              <div className='card-body pt-2 pb-4'>
-                {loadingInit ? (
-                  <div className='text-muted fs-7 text-center py-4'>Loading...</div>
-                ) : sections.length === 0 ? (
-                  <div className='text-center py-5'>
-                    <div className='fs-2 mb-2'>🏫</div>
-                    <div className='text-muted fs-7'>Aapko koi section assign nahi kiya gaya hai.</div>
-                  </div>
-                ) : (
-                  <div className='d-flex flex-column gap-2'>
-                    {sections.map(sec => (
-                      <button
-                        key={sec.class_section_id}
-                        onClick={() => handleSectionSelect(sec)}
-                        className={`btn btn-sm text-start py-3 px-4 fw-semibold ${
-                          selectedSection?.class_section_id === sec.class_section_id
-                            ? 'btn-primary'
-                            : 'btn-light btn-active-light-primary'
-                        }`}
-                        style={{ borderRadius: '8px' }}
-                      >
-                        <div className='d-flex align-items-center gap-2'>
-                          <span className='fs-4'>🏫</span>
-                          <div>
-                            <div>{sec.label}</div>
-                            {sec.is_class_teacher && (
-                              <span className='badge badge-light-success fs-9'>Class Teacher</span>
-                            )}
-                          </div>
+        {/* Session Banner */}
+        {!loadingSession && session && (
+            <div className='notice d-flex bg-light-primary rounded border-primary border border-dashed mb-5 p-4'>
+                <i className={`ki-duotone ${isPeriod ? 'ki-time' : 'ki-calendar'} fs-1 text-primary me-4 mt-1`}>
+                    <span className="path1"></span>
+                    <span className="path2"></span>
+                </i>
+                <div className="d-flex flex-stack flex-grow-1">
+                    <div className="fw-semibold">
+                        <h5 className="text-gray-900 fw-bold mb-1">Academic Session: {session.session_year}</h5>
+                        <div className="fs-7 text-gray-700">
+                            {isPeriod ? 'Period-wise Attendance Mode. Select a period below to mark attendance.' : 'Daily Attendance Mode. Select your section below.'}
                         </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Date Selector */}
-            <div className='card card-flush shadow-sm mb-5'>
-              <div className='card-header min-h-50px'>
-                <h6 className='card-title fw-bold text-gray-700'>
-                  <i className='ki-duotone ki-calendar fs-4 me-2'>
-                    <span className='path1'></span><span className='path2'></span>
-                  </i>
-                  Select Date
-                </h6>
-              </div>
-              <div className='card-body pt-2 pb-4'>
-                <input
-                  type='date'
-                  className='form-control form-control-solid'
-                  value={selectedDate}
-                  max={todayStr()}
-                  onChange={e => setSelectedDate(e.target.value)}
-                />
-                <div className='text-muted fs-8 mt-2'>
-                  {selectedDate === todayStr() ? '📅 Aaj (Today)' : `📆 ${selectedDate}`}
-                </div>
-              </div>
-            </div>
-
-            {/* Period Selector — Only in PERIOD mode */}
-            {isPeriodMode && (
-              <div className='card card-flush shadow-sm border border-warning'>
-                <div className='card-header min-h-50px bg-light-warning rounded-top'>
-                  <h6 className='card-title fw-bold text-warning'>
-                    ⏱ Select Period ({todayDay})
-                  </h6>
-                </div>
-                <div className='card-body pt-2 pb-4'>
-                  {timetableEntries.length === 0 ? (
-                    <div className='text-center py-4'>
-                      <div className='fs-3 mb-2'>📭</div>
-                      <div className='text-muted fs-7'>Aaj ke liye koi period nahi mila.</div>
-                      <div className='text-muted fs-8 mt-1'>Timetable configured karo.</div>
                     </div>
-                  ) : (
-                    <div className='d-flex flex-column gap-2'>
-                      {timetableEntries.map((entry, idx) => (
-                        <button
-                          key={entry.id}
-                          onClick={() => setSelectedPeriodId(entry.id)}
-                          className={`btn btn-sm text-start py-3 px-3 ${
-                            selectedPeriodId === entry.id ? 'btn-warning' : 'btn-light'
-                          }`}
-                          style={{ borderRadius: '8px' }}
-                        >
-                          <div className='fw-bold fs-7'>
-                            P{idx + 1}: {entry.subject?.name || 'Period'}
-                          </div>
-                          {entry.period_slot && (
-                            <div className='text-muted fs-8'>
-                              {entry.period_slot.start_time} – {entry.period_slot.end_time}
-                            </div>
-                          )}
-                        </button>
+                </div>
+            </div>
+        )}
+
+        {/* Filter Bar */}
+        <div className='card card-flush mb-5'>
+          <div className='card-body py-4'>
+            <div className='row g-4 align-items-end'>
+              <div className='col-md-3'>
+                <label className='fw-semibold fs-7 mb-1 text-gray-600'>Date</label>
+                <input type='date' className='form-control form-control-solid form-control-sm' 
+                       value={selectedDate} max={todayStr()} onChange={e => handleDateChange(e.target.value)} />
+              </div>
+
+              {!loadingSession && isPeriod && (
+                  <div className='col-md-4'>
+                    <label className='fw-semibold fs-7 mb-1 text-gray-600'>Select Period</label>
+                    <select className='form-select form-select-solid form-select-sm' value={selectedPeriodId}
+                      onChange={e => setSelectedPeriodId(e.target.value)}>
+                      <option value=''>-- Select Period --</option>
+                      {periods.map((p, idx) => (
+                        <option key={p.timetable_entry_id} value={p.timetable_entry_id}>
+                            P{idx + 1}: {p.subject.name} ({p.class_section.label}) - {p.period_slot.start_time} to {p.period_slot.end_time} {p.attendance_marked ? '✅' : ''}
+                        </option>
                       ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ════════════════════════════════════════
-              RIGHT PANEL — Student Attendance Table
-          ════════════════════════════════════════ */}
-          <div className='col-xl-9 col-lg-8'>
-            <div className='card card-flush shadow-sm'>
-              {/* Header */}
-              <div className='card-header align-items-center py-4 border-bottom'>
-                <div className='card-title flex-column'>
-                  <h4 className='fw-bolder mb-1 text-gray-800'>
-                    {selectedSection ? selectedSection.label : 'Section select karo'}
-                  </h4>
-                  <div className='text-muted fs-7 d-flex align-items-center gap-3 flex-wrap'>
-                    <span>📅 {selectedDate}</span>
-                    <span>•</span>
-                    <span>{total} Students</span>
-                    {isPeriodMode && selectedPeriod && (
-                      <>
-                        <span>•</span>
-                        <span className='badge badge-light-warning'>
-                          ⏱ {selectedPeriod.subject?.name || 'Period'} ({selectedPeriod.period_slot?.start_time} – {selectedPeriod.period_slot?.end_time})
-                        </span>
-                      </>
-                    )}
-                    {isPeriodMode && !selectedPeriod && (
-                      <span className='badge badge-light-danger fs-8'>⚠️ Period select karo</span>
-                    )}
+                    </select>
                   </div>
-                </div>
-                {/* Quick mark all */}
-                {total > 0 && (
-                  <div className='card-toolbar d-flex gap-2 flex-wrap'>
-                    <span className='text-muted fs-8 me-1 align-self-center'>Mark all:</span>
-                    {STATUS_OPTIONS.map(s => (
-                      <button
-                        key={s}
-                        className={`btn btn-xs btn-sm ${STATUS_CONFIG[s].btnClass} btn-light py-1 px-2 fs-8`}
-                        onClick={() => markAllStatus(s)}
-                        title={`Mark all ${STATUS_CONFIG[s].label}`}
-                        style={{ minWidth: '70px', opacity: 0.85 }}
-                      >
-                        {STATUS_CONFIG[s].icon} {STATUS_CONFIG[s].label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Stats Bar */}
-              {total > 0 && (
-                <div className='px-8 py-4 border-bottom bg-light-subtle'>
-                  <div className='d-flex gap-5 flex-wrap align-items-center'>
-                    <div className='d-flex align-items-center gap-2'>
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#50cd89' }}></div>
-                      <span className='fs-7 text-gray-600'>Present <strong>{present}</strong></span>
-                    </div>
-                    <div className='d-flex align-items-center gap-2'>
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#f1416c' }}></div>
-                      <span className='fs-7 text-gray-600'>Absent <strong>{absent}</strong></span>
-                    </div>
-                    <div className='d-flex align-items-center gap-2'>
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffc700' }}></div>
-                      <span className='fs-7 text-gray-600'>Late <strong>{late}</strong></span>
-                    </div>
-                    <div className='d-flex align-items-center gap-2'>
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#009ef7' }}></div>
-                      <span className='fs-7 text-gray-600'>Half Day <strong>{halfDay}</strong></span>
-                    </div>
-                    {notMarked > 0 && (
-                      <div className='d-flex align-items-center gap-2'>
-                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#b5b5c3' }}></div>
-                        <span className='fs-7 text-warning fw-bold'>Unmarked <strong>{notMarked}</strong></span>
-                      </div>
-                    )}
-                    <div className='ms-auto'>
-                      <span className={`badge fs-7 ${pct >= 75 ? 'badge-light-success' : 'badge-light-danger'}`}>
-                        {pct}% Attendance
-                      </span>
-                    </div>
-                  </div>
-                  {/* Progress bar */}
-                  <div className='progress h-8px mt-3 rounded bg-light'>
-                    <div className='progress-bar bg-success' style={{ width: `${total > 0 ? (present / total) * 100 : 0}%` }} />
-                    <div className='progress-bar bg-info' style={{ width: `${total > 0 ? (halfDay / total) * 100 : 0}%` }} />
-                    <div className='progress-bar bg-warning' style={{ width: `${total > 0 ? (late / total) * 100 : 0}%` }} />
-                    <div className='progress-bar bg-danger' style={{ width: `${total > 0 ? (absent / total) * 100 : 0}%` }} />
-                  </div>
-                </div>
               )}
 
-              {/* Student Table */}
-              <div className='card-body pt-0' style={{ maxHeight: '55vh', overflowY: 'auto' }}>
-                {!selectedSection ? (
-                  <div className='text-center py-16 text-muted'>
-                    <div className='fs-1 mb-3'>👈</div>
-                    <p className='fs-6'>Left panel se ek section select karo</p>
-                  </div>
-                ) : loadingStudents ? (
-                  <div className='text-center py-16'>
-                    <div className='spinner-border text-primary mb-3' role='status' />
-                    <p className='text-muted'>Students load ho rahe hain...</p>
-                  </div>
-                ) : students.length === 0 ? (
-                  <div className='text-center py-16 text-muted'>
-                    <div className='fs-1 mb-3'>👤</div>
-                    <p>Is section mein koi enrolled student nahi hai.</p>
-                  </div>
-                ) : (
-                  <table className='table align-middle table-row-dashed table-hover gy-4 gs-6 fs-6 mb-0'>
-                    <thead>
-                      <tr className='text-start text-gray-400 fw-bold fs-7 text-uppercase border-bottom'>
-                        <th style={{ width: 40 }}>#</th>
-                        <th>Student</th>
-                        <th style={{ minWidth: 280 }}>
-                          Attendance Status
-                          {isPeriodMode && <span className='text-warning ms-2 fs-8'>(Period: {selectedPeriod?.subject?.name || '—'})</span>}
-                        </th>
-                        <th style={{ minWidth: 160 }}>Remark</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {students.map((student, idx) => (
-                        <tr key={student.student_id} className={student.status === 'NOT_MARKED' ? 'bg-light-warning bg-opacity-25' : ''}>
-                          <td className='text-gray-500 fw-semibold'>{idx + 1}</td>
-                          <td>
-                            <div className='d-flex align-items-center gap-3'>
-                              <div className='symbol symbol-40px symbol-circle'>
-                                {student.photo_url ? (
-                                  <img src={student.photo_url} alt='' />
-                                ) : (
-                                  <div className='symbol-label fw-bold bg-light-primary text-primary fs-6'>
-                                    {student.full_name.charAt(0).toUpperCase()}
-                                  </div>
-                                )}
-                              </div>
-                              <div>
-                                <div className='fw-bold text-gray-800 lh-1'>{student.full_name}</div>
-                                <div className='text-muted fs-8 mt-1'>Roll No: {student.roll_number}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className='d-flex gap-2 flex-wrap'>
-                              {STATUS_OPTIONS.map(opt => (
-                                <button
-                                  key={opt}
-                                  onClick={() => updateStatus(student.student_id, opt)}
-                                  className={`btn btn-sm px-3 py-2 fw-semibold fs-8 ${
-                                    student.status === opt
-                                      ? STATUS_CONFIG[opt].btnClass
-                                      : 'btn-light btn-active-light-primary'
-                                  }`}
-                                  style={{ borderRadius: '6px', minWidth: '68px' }}
-                                >
-                                  {STATUS_CONFIG[opt].icon} {STATUS_CONFIG[opt].label}
-                                </button>
-                              ))}
-                            </div>
-                            {student.status === 'NOT_MARKED' && (
-                              <span className='badge badge-light-warning fs-9 mt-1'>⚠ Mark karo</span>
-                            )}
-                          </td>
-                          <td>
-                            <input
-                              type='text'
-                              className='form-control form-control-sm form-control-solid'
-                              placeholder='Remark (optional)'
-                              value={student.remark}
-                              onChange={e => updateRemark(student.student_id, e.target.value)}
-                            />
-                          </td>
-                        </tr>
+              {!loadingSession && !isPeriod && (
+                  <div className='col-md-4'>
+                    <label className='fw-semibold fs-7 mb-1 text-gray-600'>Select Section</label>
+                    <select className='form-select form-select-solid form-select-sm' value={selectedSectionId}
+                      onChange={e => setSelectedSectionId(e.target.value)}>
+                      <option value=''>-- Select Section --</option>
+                      {sections.map(s => (
+                        <option key={s.class_section_id} value={s.class_section_id}>
+                            {s.label} {s.is_class_teacher ? '(Class Teacher)' : ''}
+                        </option>
                       ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-              {/* Footer */}
-              {students.length > 0 && (
-                <div className='card-footer d-flex align-items-center justify-content-between py-4'>
-                  <div className='fs-7'>
-                    {notMarked > 0 ? (
-                      <span className='text-warning fw-semibold'>⚠️ {notMarked} students ki attendance pending hai</span>
-                    ) : (
-                      <span className='text-success fw-semibold'>✅ Sab students ki attendance mark ho gayi</span>
-                    )}
-                    {isPeriodMode && !selectedPeriodId && (
-                      <span className='text-danger ms-3 fw-bold'>— Period select karna zaroori hai!</span>
-                    )}
+                    </select>
                   </div>
-                  <button
-                    id='btn-submit-attendance'
-                    className={`btn btn-sm px-7 ${isPeriodMode ? 'btn-warning' : 'btn-primary'}`}
-                    onClick={handleSubmit}
-                    disabled={submitting || (isPeriodMode && !selectedPeriodId)}
-                  >
-                    {submitting ? (
-                      <>
-                        <span className='spinner-border spinner-border-sm me-2' />
-                        Submitting...
-                      </>
-                    ) : (
-                      <>
-                        <i className='ki-duotone ki-check fs-3 me-1'></i>
-                        {isPeriodMode ? '⏱ Submit Period Attendance' : '📅 Submit Daily Attendance'}
-                      </>
-                    )}
-                  </button>
-                </div>
               )}
+
+              <div className='col-md-2'>
+                <button className='btn btn-sm w-100 btn-primary' 
+                        onClick={fetchAttendance} disabled={loadingStudents || (isPeriod ? !selectedPeriodId : !selectedSectionId)}>
+                    {loadingStudents ? <span className='spinner-border spinner-border-sm'></span> : 'Fetch Students'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Main Table Card */}
+        <div className='card card-flush'>
+          <div className='card-header align-items-center py-5 gap-2 gap-md-5'>
+            <div className='card-title d-flex align-items-center gap-4'>
+              <div className='d-flex align-items-center position-relative my-1'>
+                <i className='ki-duotone ki-magnifier fs-3 position-absolute ms-4'>
+                  <span className='path1'></span><span className='path2'></span>
+                </i>
+                <input type='text' className='form-control form-control-solid w-250px ps-14'
+                  placeholder='Search student...' value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+              
+              {isAlreadyMarked && (
+                  <span className='badge badge-light-success fs-7 fw-bold px-4 py-3'>
+                    <i className='ki-duotone ki-check-circle fs-4 text-success me-2'><span className='path1'></span><span className='path2'></span></i>
+                    All marked for this period
+                  </span>
+              )}
+            </div>
+            
+            <div className='card-toolbar'>
+                <button className='btn btn-light-success btn-sm me-2' onClick={() => markAll('PRESENT')} disabled={students.length === 0}>
+                    Mark All Present
+                </button>
+                <button className='btn btn-light-danger btn-sm' onClick={() => markAll('ABSENT')} disabled={students.length === 0}>
+                    Mark All Absent
+                </button>
+            </div>
+          </div>
+
+          <div className='card-body pt-0'>
+              <div className='table-responsive'>
+                  <table className='table align-middle table-row-dashed fs-6 gy-5'>
+                      <thead>
+                          <tr className='text-start text-gray-400 fw-bold fs-7 text-uppercase gs-0'>
+                              <th className='w-50px'>#</th>
+                              <th className='min-w-200px'>Student</th>
+                              <th className='min-w-350px'>Attendance Status</th>
+                              <th className='min-w-200px'>Remark</th>
+                          </tr>
+                      </thead>
+                      <tbody className='fw-semibold text-gray-600'>
+                          {students.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className='text-center py-10 text-muted'>
+                                        {loadingStudents ? 'Fetching students...' : 'Select a period/section and fetch students to mark attendance.'}
+                                    </td>
+                                </tr>
+                          ) : filteredStudents.map((student, idx) => (
+                              <tr key={student.student_id}>
+                                  <td>{idx + 1}</td>
+                                  <td>
+                                      <div className='d-flex align-items-center'>
+                                          <div className='symbol symbol-circle symbol-35px overflow-hidden me-3'>
+                                              {student.photo_url ? (
+                                                <div className='symbol-label'>
+                                                    <img src={student.photo_url} alt={student.full_name} className='w-100' />
+                                                </div>
+                                              ) : (
+                                                  <div className='symbol-label fs-3 bg-light-primary text-primary'>
+                                                      {student.full_name.charAt(0)}
+                                                  </div>
+                                              )}
+                                          </div>
+                                          <div className='d-flex flex-column'>
+                                              <span className='text-gray-800 fw-bold mb-1'>
+                                                  {student.full_name}
+                                              </span>
+                                              <span className='text-muted fs-7'>Roll No: {student.roll_number}</span>
+                                          </div>
+                                      </div>
+                                  </td>
+                                  <td>
+                                      <div className='d-flex flex-wrap gap-2'>
+                                            {STATUSES.map(status => {
+                                                const isChecked = student.status === status;
+                                                let colorClass = 'primary';
+                                                if (status === 'PRESENT') colorClass = 'success';
+                                                if (status === 'ABSENT') colorClass = 'danger';
+                                                if (status === 'LATE') colorClass = 'warning';
+                                                if (status === 'HALF_DAY') colorClass = 'info';
+                                                
+                                                return (
+                                                    <label key={status} className={`btn btn-sm btn-outline btn-outline-dashed px-3 py-2 cursor-pointer
+                                                        ${isChecked ? `btn-active-light-${colorClass} active border-${colorClass}` : 'btn-active-light-primary border-gray-300'}
+                                                    `}>
+                                                        <input
+                                                            type='radio'
+                                                            className='btn-check'
+                                                            value={status}
+                                                            checked={isChecked}
+                                                            onChange={() => updateStatus(student.student_id, status)}
+                                                        />
+                                                        <span className={`fw-bold ${isChecked ? `text-${colorClass}` : 'text-gray-600'}`}>
+                                                            {status}
+                                                        </span>
+                                                    </label>
+                                                );
+                                            })}
+
+                                            {student.status === 'NOT_MARKED' && (
+                                                <span className='badge badge-light-warning fs-8 align-self-center'>⚠ Mark pending</span>
+                                            )}
+                                      </div>
+                                  </td>
+                                  <td>
+                                      <input 
+                                          type='text' 
+                                          className='form-control form-control-sm form-control-solid' 
+                                          placeholder='Add remark...'
+                                          value={student.remark}
+                                          onChange={(e) => updateRemark(student.student_id, e.target.value)}
+                                      />
+                                  </td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
+
+              {students.length > 0 && (
+                  <div className='d-flex justify-content-end mt-5'>
+                      <button className='btn btn-primary' onClick={handleSubmit} disabled={submitting}>
+                          {submitting ? <span className='spinner-border spinner-border-sm me-2'></span> : <i className='ki-duotone ki-check fs-2'><span className='path1'></span><span className='path2'></span></i>}
+                          {isPeriod ? 'Submit Period Attendance' : 'Submit Daily Attendance'}
+                      </button>
+                  </div>
+              )}
+          </div>
+        </div>
+
       </Content>
+
+      {/* Success Modal */}
+      <div className={`modal fade ${showSuccessModal ? 'show d-block' : ''}`} tabIndex={-1} style={{ backgroundColor: showSuccessModal ? 'rgba(0,0,0,0.5)' : 'transparent' }}>
+          <div className='modal-dialog modal-dialog-centered'>
+              <div className='modal-content'>
+                  <div className='modal-body text-center py-10'>
+                      <div className='mb-5'>
+                          <i className='ki-duotone ki-check-circle fs-5x text-success'>
+                              <span className='path1'></span><span className='path2'></span>
+                          </i>
+                      </div>
+                      <h2 className='fw-bolder text-gray-900 mb-3'>Success!</h2>
+                      <p className='text-gray-600 fs-5 mb-8'>Attendance has been successfully saved.</p>
+                      <button type='button' className='btn btn-primary px-8' onClick={() => setShowSuccessModal(false)}>
+                          Done
+                      </button>
+                  </div>
+              </div>
+          </div>
+      </div>
     </>
   )
 }
