@@ -60,7 +60,7 @@ export function getMySections(schoolId: string | number) {
  *  → { success, data: { date, session_id, class_section_id, summary, students } }
  */
 export function getSectionAttendance(schoolId: string | number, classSectionId: number, date: string) {
-  return axios.get(`${API_URL}/school/${schoolId}/teacher-app/sections/${classSectionId}/attendance`, {
+  return axios.get(`${API_URL}/school/${schoolId}/teacher-app/attendance/sections/${classSectionId}`, {
     params: { date }
   })
 }
@@ -74,7 +74,7 @@ export function markDailyAttendance(
   payload: { date: string; session_id?: number; students: { student_id: number; status: string; remark?: string }[] }
 ) {
   return axios.post(
-    `${API_URL}/school/${schoolId}/teacher-app/sections/${classSectionId}/attendance`,
+    `${API_URL}/school/${schoolId}/teacher-app/attendance/sections/${classSectionId}`,
     payload
   )
 }
